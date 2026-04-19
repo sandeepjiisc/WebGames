@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixiJS Unicorn Rescue & Shark Boss</title>
+    <!-- Load PixiJS v7 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #121220;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #E040FB;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            position: absolute;
+            top: 0;
+            z-index: 10;
+        }
+        #game-container {
+            position: relative;
+            margin-top: 60px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 4px solid #9C27B0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            color: white;
+        }
+        #overlay h2 {
+            font-size: 48px;
+            color: #FF5252;
+            margin: 0 0 20px 0;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 22px;
+            background-color: #E040FB;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #9C27B0;
+        }
+        button:active {
+            box-shadow: 0 2px 0 #9C27B0;
+            transform: translateY(3px);
+        }
+        .controls {
+            margin-top: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🦄 Rescue & Shark Boss (PixiJS) 🦈</h1>
+
+    <div id="game-container">
+        <!-- PixiJS Canvas goes here -->
+        <div id="overlay">
+            <h2>Game Over!</h2>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <strong>Rescue Phase:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
+        <strong>Boss Phase:</strong> ⬅️ ➡️ to Move | <strong>Spacebar</strong> to Shoot
+    </div>
+
+    <script>
+        // --- PIXI SETUP ---
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 600;
+        const POND_Y = 480;
+
+        const app = new PIXI.Application({
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+            backgroundColor: 0x81D4FA, // Sky Blue
+            antialias: true
+        });
+        document.getElementById('game-container').appendChild(app.view);
+
+        // --- GAME STATE ---
+        let score = 0;
+        let phase = 'rescue';
+        let targetBossScore = 200;
+        let gameOver = false;
+
+        let unicorns = [];
+        let bullets = [];
+        let savedRabbits = []; // Animation of them flying away
+
+        let sharkData = { hp: 10, maxHp: 10, speed: 3.5, dir: 1, state: 'swimming', vy: 0 };
+        let playerState = { vy: 0, isJumping: false, speed: 5 };
+
+        // --- INPUTS ---
+        const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false };
+        let lastFired = 0;
+
+        window.addEventListener('keydown', (e) => {
+            if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
+            if(e.code === 'ArrowUp' && phase === 'rescue' && !playerState.isJumping) {
+                playerState.vy = -12; // Jump power
+                playerState.isJumping = true;
+            }
+            if(e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+                e.preventDefault(); // prevent scrolling
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
+        });
+
+        // --- CONTAINERS (Layers) ---
+        const bgLayer = new PIXI.Container();
+        const mainLayer = new PIXI.Container();
+        const waterLayer = new PIXI.Container(); // Rendered over characters in the pond
+        const uiLayer = new PIXI.Container();
+
+        app.stage.addChild(bgLayer);
+        app.stage.addChild(mainLayer);
+        app.stage.addChild(waterLayer);
+        app.stage.addChild(uiLayer);
+
+        // --- GRAPHICS & TEXTURES ---
+        // Water Background
+        const waterRect = new PIXI.Graphics();
+        waterRect.beginFill(0x0288D1, 0.6); // Transparent blue
+        waterRect.drawRect(0, POND_Y + 20, GAME_WIDTH, GAME_HEIGHT - POND_Y);
+        waterRect.endFill();
+        waterLayer.addChild(waterRect);
+
+        // Ground line
+        const groundLine = new PIXI.Graphics();
+        groundLine.beginFill(0x1A237E, 1);
+        groundLine.drawRect(0, POND_Y + 15, GAME_WIDTH, 5);
+        groundLine.endFill();
+        bgLayer.addChild(groundLine);
+
+        // We use Text objects as sprites since we don't have external images
+        const createEmojiSprite = (emoji, size, x, y, anchorY = 1) => {
+            const style = new PIXI.TextStyle({ fontSize: size, fill: '#ffffff' });
+            const text = new PIXI.Text(emoji, style);
+            text.anchor.set(0.5, anchorY);
+            text.x = x;
+            text.y = y;
+            return text;
+        };
+
+        // --- ENTITIES ---
+        const player = createEmojiSprite('🐰', 45, GAME_WIDTH/2, POND_Y);
+        mainLayer.addChild(player);
+
+        const shark = createEmojiSprite('🦈', 70, GAME_WIDTH/2, 530, 0.5);
+        shark.visible = false;
+        mainLayer.addChild(shark);
+
+        // --- UI ---
+        const scoreText = new PIXI.Text('Score: 0', new PIXI.TextStyle({ fontSize: 28, fill: '#1A237E', fontWeight: 'bold' }));
+        scoreText.position.set(20, 15);
+        uiLayer.addChild(scoreText);
+
+        const phaseText = new PIXI.Text('Phase: Rescue', new PIXI.TextStyle({ fontSize: 24, fill: '#1A237E', fontWeight: 'bold' }));
+        phaseText.anchor.set(1, 0);
+        phaseText.position.set(GAME_WIDTH - 20, 15);
+        uiLayer.addChild(phaseText);
+
+        const centerMsg = new PIXI.Text('', new PIXI.TextStyle({ fontSize: 50, fill: '#F44336', fontWeight: 'bold', stroke: '#ffffff', strokeThickness: 6 }));
+        centerMsg.anchor.set(0.5);
+        centerMsg.position.set(GAME_WIDTH/2, 300);
+        centerMsg.visible = false;
+        uiLayer.addChild(centerMsg);
+
+        // Boss HP Bar
+        const bossHpBg = new PIXI.Graphics();
+        bossHpBg.beginFill(0x333333);
+        bossHpBg.lineStyle(3, 0xffffff);
+        bossHpBg.drawRect(200, 50, 400, 20);
+        bossHpBg.endFill();
+        bossHpBg.visible = false;
+        uiLayer.addChild(bossHpBg);
+
+        const bossHpFill = new PIXI.Graphics();
+        bossHpFill.visible = false;
+        uiLayer.addChild(bossHpFill);
+
+        function updateHpBar() {
+            bossHpFill.clear();
+            if(phase !== 'boss') return;
+            const fillWidth = 400 * (sharkData.hp / sharkData.maxHp);
+            bossHpFill.beginFill(0xF44336);
+            bossHpFill.drawRect(200, 50, fillWidth, 20);
+            bossHpFill.endFill();
+        }
+
+        // --- GAME LOGIC HELPERS ---
+        function checkCollision(obj1, obj2, dist) {
+            // Because Text anchors are (0.5, 1) and (0.5, 0.5) we just use simple radius math
+            const dx = obj1.x - obj2.x;
+            const dy = (obj1.y - (obj1.height/2)) - (obj2.y - (obj2.height/2)); // approximate center
+            return Math.sqrt(dx*dx + dy*dy) < dist;
+        }
+
+        function triggerBoss() {
+            phase = 'boss';
+            phaseText.text = 'Phase: BOSS FIGHT!';
+            phaseText.style.fill = '#F44336';
+
+            // Clear unicorns
+            unicorns.forEach(u => mainLayer.removeChild(u.sprite));
+            unicorns = [];
+
+            // Ascend to sky
+            player.y = 80;
+            player.text = '🦄🐰🔫';
+            player.scale.x = 1; // Unflip
+
+            // Setup Boss
+            sharkData.hp = 10 + (targetBossScore/200) * 5;
+            sharkData.maxHp = sharkData.hp;
+            sharkData.speed = 3.5 + (targetBossScore/200);
+            shark.x = GAME_WIDTH/2;
+            shark.y = 530;
+            shark.visible = true;
+            sharkData.state = 'swimming';
+            sharkData.dir = 1;
+
+            bossHpBg.visible = true;
+            bossHpFill.visible = true;
+            updateHpBar();
+
+            centerMsg.text = "SHARK ATTACK!";
+            centerMsg.visible = true;
+            setTimeout(() => centerMsg.visible = false, 2000);
+        }
+
+        function defeatBoss() {
+            score += 50;
+            targetBossScore += 200;
+            scoreText.text = 'Score: ' + score;
+
+            phase = 'rescue';
+            phaseText.text = 'Phase: Rescue';
+            phaseText.style.fill = '#1A237E';
+
+            // Reset player
+            player.y = POND_Y;
+            player.text = '🐰';
+
+            // Hide Boss
+            shark.visible = false;
+            bossHpBg.visible = false;
+            bossHpFill.visible = false;
+            bullets.forEach(b => mainLayer.removeChild(b));
+            bullets = [];
+
+            centerMsg.text = "BOSS DEFEATED!";
+            centerMsg.visible = true;
+            setTimeout(() => centerMsg.visible = false, 2000);
+        }
+
+        // --- MAIN LOOP ---
+        app.ticker.add((delta) => {
+            if (gameOver) return;
+
+            // 1. Player Movement
+            if (keys.ArrowLeft) {
+                player.x -= playerState.speed * delta;
+                if(phase === 'rescue') player.scale.x = -1; // Flip
+            }
+            if (keys.ArrowRight) {
+                player.x += playerState.speed * delta;
+                if(phase === 'rescue') player.scale.x = 1;
+            }
+
+            // Constrain Bounds
+            if (player.x < 30) player.x = 30;
+            if (player.x > GAME_WIDTH - 30) player.x = GAME_WIDTH - 30;
+
+            if (phase === 'rescue') {
+                // Gravity / Jumping
+                if (playerState.isJumping) {
+                    playerState.vy += 0.5 * delta; // Gravity
+                    player.y += playerState.vy * delta;
+
+                    if (player.y >= POND_Y) {
+                        player.y = POND_Y;
+                        playerState.isJumping = false;
+                        playerState.vy = 0;
+                    }
+                }
+
+                // Spawn Unicorns
+                if (Math.random() < 0.015 * delta) {
+                    const uSprite = createEmojiSprite('🦄', 40, 50 + Math.random() * 700, -30, 0.5);
+                    mainLayer.addChild(uSprite);
+                    unicorns.push({
+                        sprite: uSprite,
+                        speed: 2 + Math.random() * 2
+                    });
+                }
+
+                // Update Unicorns
+                for (let i = unicorns.length - 1; i >= 0; i--) {
+                    let u = unicorns[i];
+                    u.sprite.y += u.speed * delta;
+
+                    // Catch
+                    if (checkCollision(player, u.sprite, 45)) {
+                        // Saved animation
+                        const saved = createEmojiSprite('🦄🐰', 40, u.sprite.x, u.sprite.y, 0.5);
+                        mainLayer.addChild(saved);
+                        savedRabbits.push({ sprite: saved, life: 60 });
+
+                        mainLayer.removeChild(u.sprite);
+                        unicorns.splice(i, 1);
+                        score += 20;
+                        scoreText.text = 'Score: ' + score;
+
+                        if (score >= targetBossScore) triggerBoss();
+                        continue;
+                    }
+
+                    // Miss
+                    if (u.sprite.y > GAME_HEIGHT + 50) {
+                        mainLayer.removeChild(u.sprite);
+                        unicorns.splice(i, 1);
+                    }
+                }
+
+                // Update Saved Animations
+                for (let i = savedRabbits.length - 1; i >= 0; i--) {
+                    let s = savedRabbits[i];
+                    s.sprite.y -= 3 * delta;
+                    s.life -= delta;
+                    s.sprite.alpha = s.life / 60;
+                    if(s.life <= 0) {
+                        mainLayer.removeChild(s.sprite);
+                        savedRabbits.splice(i, 1);
+                    }
+                }
+
+            } 
+            else if (phase === 'boss') {
+                // Keep player in sky
+                player.y = 80;
+
+                // Shooting
+                if (keys.Space) {
+                    let now = Date.now();
+                    if (now - lastFired > 250) {
+                        lastFired = now;
+                        const b = new PIXI.Graphics();
+                        b.beginFill(0xFFEB3B); // Yellow
+                        b.drawCircle(0, 0, 8);
+                        b.endFill();
+                        b.x = player.x + 20;
+                        b.y = player.y; // Text anchor is 1, so y is bottom
+                        mainLayer.addChild(b);
+                        bullets.push(b);
+                    }
+                }
+
+                // Update Bullets
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    let b = bullets[i];
+                    b.y += 10 * delta;
+
+                    if (checkCollision(b, shark, 40)) {
+                        mainLayer.removeChild(b);
+                        bullets.splice(i, 1);
+
+                        // Flash Red
+                        shark.tint = 0xff0000;
+                        setTimeout(() => { shark.tint = 0xFFFFFF; }, 100);
+
+                        sharkData.hp--;
+                        updateHpBar();
+
+                        if (sharkData.hp <= 0) defeatBoss();
+                        continue;
+                    }
+
+                    if (b.y > GAME_HEIGHT) {
+                        mainLayer.removeChild(b);
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // Update Boss
+                if (sharkData.state === 'swimming') {
+                    shark.x += sharkData.speed * sharkData.dir * delta;
+                    shark.scale.x = -sharkData.dir; // Face direction
+
+                    if (shark.x > GAME_WIDTH - 50) sharkData.dir = -1;
+                    if (shark.x < 50) sharkData.dir = 1;
+
+                    // Random jump
+                    if (Math.random() < 0.015 * delta) {
+                        sharkData.state = 'jumping';
+                        sharkData.vy = -15; // Jump power (negative goes up)
+                    }
+                } else if (sharkData.state === 'jumping') {
+                    sharkData.vy += 0.4 * delta; // Gravity
+                    shark.y += sharkData.vy * delta;
+
+                    // Splash down
+                    if (shark.y >= 530 && sharkData.vy > 0) {
+                        shark.y = 530;
+                        sharkData.state = 'swimming';
+                        sharkData.dir = Math.random() > 0.5 ? 1 : -1;
+                    }
+                }
+
+                // Eaten Check
+                if (checkCollision(player, shark, 50)) {
+                    gameOver = true;
+                    player.tint = 0xff0000;
+                    document.getElementById('overlay').style.display = 'flex';
+                    app.ticker.stop();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

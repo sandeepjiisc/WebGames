@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MelonJS Unicorn Rescue & Shark Boss</title>
+    <!-- Load MelonJS from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/melonjs/dist/melonjs.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #121220;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #E040FB;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            position: absolute;
+            top: 0;
+            z-index: 10;
+        }
+        #screen {
+            margin-top: 60px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 4px solid #9C27B0;
+            border-radius: 10px;
+            overflow: hidden;
+            width: 800px;
+            height: 600px;
+            background-color: #81D4FA;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            color: white;
+        }
+        #overlay h2 {
+            font-size: 64px;
+            color: #FF5252;
+            margin: 0 0 20px 0;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background-color: #E040FB;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #9C27B0;
+        }
+        button:active {
+            box-shadow: 0 2px 0 #9C27B0;
+            transform: translateY(4px);
+        }
+        .controls {
+            margin-top: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🦄 Rescue & Shark Boss (MelonJS) 🦈</h1>
+
+    <div id="screen"></div>
+
+    <div class="controls">
+        <strong>Rescue Phase:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
+        <strong>Boss Phase:</strong> ⬅️ ➡️ to Move | <strong>Spacebar</strong> to Shoot
+    </div>
+
+    <div id="overlay">
+        <h2>Game Over!</h2>
+        <button onclick="location.reload()">Play Again</button>
+    </div>
+
+    <script>
+        // Use Global 'me' from script tag
+        me.device.onReady(function () {
+
+            // Initialize Video
+            if (!me.video.init(800, 600, {parent : "screen", scale : "auto"})) {
+                alert("Your browser does not support HTML5 canvas.");
+                return;
+            }
+
+            // Global State
+            const GAME = {
+                score: 0,
+                phase: 'rescue', // 'rescue' or 'boss'
+                targetScore: 200,
+                pondY: 480,
+                gameOver: false,
+                lastFired: 0
+            };
+
+            // Define Custom Entities
+
+            // --- Player Entity ---
+            class PlayerEntity extends me.Renderable {
+                constructor(x, y) {
+                    super(x, y, 50, 50);
+                    this.text = new me.Text(0, 0, {
+                        font: "Arial", size: 45, fillStyle: "#FFFFFF", textAlign: "center", textBaseline: "bottom"
+                    });
+                    this.body = new me.Body(this, new me.Rect(0, 0, 50, 50));
+                    this.body.collisionType = me.collision.types.PLAYER_OBJECT;
+                    this.body.setMaxVelocity(5, 15);
+                    this.body.setFriction(0.4, 0);
+                    this.body.gravityScale = 0; // Custom gravity handled in update
+                    this.isJumping = false;
+                    this.alwaysUpdate = true;
+                    this.emoji = '🐰';
+                    this.anchorPoint.set(0.5, 1.0);
+                }
+
+                update(dt) {
+                    if (GAME.gameOver) return false;
+
+                    if (me.input.isKeyPressed('left')) {
+                        this.body.force.x = -this.body.maxVel.x;
+                        this.text.scale.x = -1; // Flip
+                    } else if (me.input.isKeyPressed('right')) {
+                        this.body.force.x = this.body.maxVel.x;
+                        this.text.scale.x = 1;
+                    } else {
+                        this.body.force.x = 0;
+                    }
+
+                    if (GAME.phase === 'rescue') {
+                        if (me.input.isKeyPressed('jump') && !this.isJumping) {
+                            this.body.vel.y = -12 * me.timer.tick;
+                            this.isJumping = true;
+                        }
+
+                        // Apply Gravity
+                        if (this.isJumping) {
+                            this.body.vel.y += 0.5 * me.timer.tick;
+                            if (this.pos.y >= GAME.pondY) {
+                                this.pos.y = GAME.pondY;
+                                this.body.vel.y = 0;
+                                this.isJumping = false;
+                            }
+                        }
+                    } else {
+                        // Boss phase lock y
+                        this.pos.y = 80;
+                    }
+
+                    // Constrain X
+                    if (this.pos.x < 25) this.pos.x = 25;
+                    if (this.pos.x > 775) this.pos.x = 775;
+
+                    this.body.update(dt);
+                    me.collision.check(this);
+                    return true;
+                }
+
+                draw(renderer) {
+                    this.text.draw(renderer, this.emoji, this.pos.x, this.pos.y);
+                }
+
+                onCollision(response, other) {
+                    if (other.body.collisionType === me.collision.types.COLLECTIBLE_OBJECT) {
+                        other.catch();
+                        GAME.score += 20;
+                        if (GAME.score >= GAME.targetScore) triggerBoss();
+                        return false;
+                    }
+                    if (other.body.collisionType === me.collision.types.ENEMY_OBJECT) {
+                        GAME.gameOver = true;
+                        this.emoji = '💀';
+                        document.getElementById('overlay').style.display = 'flex';
+                    }
+                    return false;
+                }
+            }
+
+            // --- Unicorn Entity ---
+            class UnicornEntity extends me.Renderable {
+                constructor(x, y) {
+                    super(x, y, 40, 40);
+                    this.text = new me.Text(0, 0, {
+                        font: "Arial", size: 40, fillStyle: "#FFFFFF", textAlign: "center", textBaseline: "bottom"
+                    });
+                    this.body = new me.Body(this, new me.Rect(0, 0, 40, 40));
+                    this.body.collisionType = me.collision.types.COLLECTIBLE_OBJECT;
+                    this.speed = 2 + Math.random() * 2;
+                    this.alwaysUpdate = true;
+                }
+
+                update(dt) {
+                    this.pos.y += this.speed * me.timer.tick;
+                    if (this.pos.y > 650) {
+                        me.game.world.removeChild(this);
+                    }
+                    this.body.update(dt);
+                    return true;
+                }
+
+                draw(renderer) {
+                    this.text.draw(renderer, '🦄', this.pos.x, this.pos.y);
+                }
+
+                catch() {
+                    me.game.world.removeChild(this);
+                }
+            }
+
+            // --- Boss Shark Entity ---
+            class SharkEntity extends me.Renderable {
+                constructor(x, y) {
+                    super(x, y, 70, 70);
+                    this.text = new me.Text(0, 0, {
+                        font: "Arial", size: 70, fillStyle: "#FFFFFF", textAlign: "center", textBaseline: "middle"
+                    });
+                    this.body = new me.Body(this, new me.Rect(0, 0, 70, 70));
+                    this.body.collisionType = me.collision.types.ENEMY_OBJECT;
+
+                    this.hp = 10;
+                    this.maxHp = 10;
+                    this.dir = 1;
+                    this.speed = 3.5;
+                    this.state = 'swimming';
+                    this.alwaysUpdate = true;
+                }
+
+                setup(score) {
+                    this.hp = 10 + (score/200) * 5;
+                    this.maxHp = this.hp;
+                    this.speed = 3.5 + (score/200);
+                    this.pos.set(400, 530);
+                    this.state = 'swimming';
+                    this.dir = 1;
+                }
+
+                update(dt) {
+                    if (GAME.phase !== 'boss') return false;
+
+                    if (this.state === 'swimming') {
+                        this.pos.x += this.speed * this.dir * me.timer.tick;
+                        this.text.scale.x = -this.dir;
+
+                        if (this.pos.x > 750) this.dir = -1;
+                        if (this.pos.x < 50) this.dir = 1;
+
+                        if (Math.random() < 0.015) {
+                            this.state = 'jumping';
+                            this.body.vel.y = -15 * me.timer.tick;
+                        }
+                    } else if (this.state === 'jumping') {
+                        this.body.vel.y += 0.4 * me.timer.tick;
+                        this.pos.y += this.body.vel.y;
+
+                        if (this.pos.y >= 530 && this.body.vel.y > 0) {
+                            this.pos.y = 530;
+                            this.state = 'swimming';
+                            this.dir = Math.random() > 0.5 ? 1 : -1;
+                        }
+                    }
+                    this.body.update(dt);
+                    return true;
+                }
+
+                draw(renderer) {
+                    this.text.draw(renderer, '🦈', this.pos.x, this.pos.y);
+
+                    // Draw HP Bar
+                    renderer.setColor("#333333");
+                    renderer.fillRect(200, 50, 400, 20);
+                    renderer.setColor("#F44336");
+                    renderer.fillRect(200, 50, 400 * (this.hp / this.maxHp), 20);
+                    renderer.setColor("#FFFFFF");
+                    renderer.strokeRect(200, 50, 400, 20);
+                }
+
+                hit() {
+                    this.hp--;
+                    if (this.hp <= 0) defeatBoss();
+                }
+            }
+
+            // --- Bullet Entity ---
+            class BulletEntity extends me.Renderable {
+                constructor(x, y) {
+                    super(x, y, 10, 10);
+                    this.body = new me.Body(this, new me.Rect(0, 0, 10, 10));
+                    this.body.collisionType = me.collision.types.PROJECTILE_OBJECT;
+                    this.alwaysUpdate = true;
+                }
+
+                update(dt) {
+                    this.pos.y += 10 * me.timer.tick;
+                    if (this.pos.y > 600) {
+                        me.game.world.removeChild(this);
+                        return false;
+                    }
+                    this.body.update(dt);
+                    me.collision.check(this);
+                    return true;
+                }
+
+                draw(renderer) {
+                    renderer.setColor("#FFEB3B");
+                    renderer.fillEllipse(this.pos.x, this.pos.y, 8, 8);
+                }
+
+                onCollision(response, other) {
+                    if (other.body.collisionType === me.collision.types.ENEMY_OBJECT) {
+                        other.hit();
+                        me.game.world.removeChild(this);
+                    }
+                    return false;
+                }
+            }
+
+            // --- UI Layer ---
+            class UILayer extends me.Renderable {
+                constructor() {
+                    super(0, 0, 800, 600);
+                    this.scoreText = new me.Text(0, 0, {font: "Arial", size: 28, fillStyle: "#1A237E", textAlign: "left", bold: true});
+                    this.phaseText = new me.Text(0, 0, {font: "Arial", size: 24, fillStyle: "#1A237E", textAlign: "right", bold: true});
+                    this.msgText = new me.Text(0, 0, {font: "Arial", size: 50, fillStyle: "#F44336", textAlign: "center", textBaseline: "middle", bold: true});
+                    this.msg = "";
+                    this.msgTimer = 0;
+                    this.alwaysUpdate = true;
+                }
+
+                update(dt) {
+                    if(this.msgTimer > 0) this.msgTimer -= dt;
+                    return true;
+                }
+
+                draw(renderer) {
+                    this.scoreText.draw(renderer, "Score: " + GAME.score, 20, 15);
+                    let pColor = GAME.phase === 'boss' ? '#F44336' : '#1A237E';
+                    this.phaseText.fillStyle.parseCSS(pColor);
+                    this.phaseText.draw(renderer, "Phase: " + (GAME.phase === 'boss' ? 'BOSS FIGHT!' : 'Rescue'), 780, 15);
+
+                    if (this.msgTimer > 0) {
+                        this.msgText.draw(renderer, this.msg, 400, 300);
+                    }
+                }
+
+                showMsg(text) {
+                    this.msg = text;
+                    this.msgTimer = 2000;
+                }
+            }
+
+            // --- Scene Setup ---
+            class PlayScreen extends me.Stage {
+                onResetEvent() {
+                    me.game.world.backgroundColor.parseCSS("#81D4FA");
+
+                    // Water Rect
+                    let water = new me.Renderable(0, GAME.pondY + 20, 800, 600 - GAME.pondY);
+                    water.draw = (r) => { r.setColor("rgba(2, 136, 209, 0.6)"); r.fillRect(0, GAME.pondY + 20, 800, 120); };
+                    me.game.world.addChild(water, 5);
+
+                    // Add Entities
+                    this.player = new PlayerEntity(400, GAME.pondY);
+                    me.game.world.addChild(this.player, 10);
+
+                    this.shark = new SharkEntity(400, 530);
+                    // don't add shark yet
+
+                    this.ui = new UILayer();
+                    me.game.world.addChild(this.ui, 20);
+
+                    // Inputs
+                    me.input.bindKey(me.input.KEY.LEFT,  "left");
+                    me.input.bindKey(me.input.KEY.RIGHT, "right");
+                    me.input.bindKey(me.input.KEY.UP,    "jump");
+                    me.input.bindKey(me.input.KEY.SPACE, "shoot");
+
+                    // Spawner
+                    me.timer.setInterval(() => {
+                        if(GAME.phase === 'rescue' && !GAME.gameOver) {
+                            me.game.world.addChild(new UnicornEntity(50 + Math.random() * 700, -30), 8);
+                        }
+                    }, 1000);
+                }
+
+                update(dt) {
+                    if (GAME.phase === 'boss' && me.input.isKeyPressed('shoot')) {
+                        let now = Date.now();
+                        if (now - GAME.lastFired > 250) {
+                            GAME.lastFired = now;
+                            me.game.world.addChild(new BulletEntity(this.player.pos.x, this.player.pos.y), 9);
+                        }
+                    }
+                    return super.update(dt);
+                }
+            }
+
+            // Phase Transitions
+            function triggerBoss() {
+                GAME.phase = 'boss';
+                let screen = me.state.current();
+
+                // Remove unicorns
+                me.game.world.getChildByProp("collisionType", me.collision.types.COLLECTIBLE_OBJECT).forEach(u => me.game.world.removeChild(u));
+
+                screen.player.pos.y = 80;
+                screen.player.emoji = '🦄🐰🔫';
+                screen.player.text.scale.x = 1;
+
+                screen.shark.setup(GAME.targetScore);
+                me.game.world.addChild(screen.shark, 6);
+
+                screen.ui.showMsg("SHARK ATTACK!");
+            }
+
+            window.defeatBoss = function() {
+                GAME.score += 50;
+                GAME.targetScore += 200;
+                GAME.phase = 'rescue';
+
+                let screen = me.state.current();
+                screen.player.pos.y = GAME.pondY;
+                screen.player.emoji = '🐰';
+
+                me.game.world.removeChild(screen.shark);
+                me.game.world.getChildByProp("collisionType", me.collision.types.PROJECTILE_OBJECT).forEach(b => me.game.world.removeChild(b));
+
+                screen.ui.showMsg("BOSS DEFEATED!");
+            };
+
+            // Start
+            me.state.set(me.state.PLAY, new PlayScreen());
+            me.state.change(me.state.PLAY);
+        });
+    </script>
+</body>
+</html>

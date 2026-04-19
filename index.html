@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroWeb Game Portal</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --card-hover: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- HOME VIEW --- */
+        #home-view {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            transition: opacity 0.3s;
+        }
+
+        header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .search-container {
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        #search-bar {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            border: 2px solid #334155;
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #search-bar:focus {
+            border-color: var(--accent);
+        }
+
+        /* Game Grid */
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .game-card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            background-color: var(--card-hover);
+            border-color: #475569;
+        }
+
+        .game-icon {
+            height: 160px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 5rem;
+        }
+
+        .game-info {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .game-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .game-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            background-color: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .no-results {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 4rem;
+            font-size: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        /* --- PLAY VIEW --- */
+        #play-view {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            flex-direction: column;
+            background-color: #000;
+        }
+
+        .top-bar {
+            height: 60px;
+            background-color: var(--card-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 2rem;
+            border-bottom: 1px solid #334155;
+            justify-content: space-between;
+        }
+
+        .back-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        #playing-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-muted);
+        }
+
+        iframe {
+            flex-grow: 1;
+            width: 100%;
+            border: none;
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HOME DASHBOARD -->
+    <div id="home-view">
+        <header>
+            <h1>🎮 Web Arcade Portal</h1>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Select a game to start playing immediately!</p>
+            <div class="search-container">
+                <input type="text" id="search-bar" placeholder="Search games by title or tags (e.g., 'boss', '2-player')...">
+            </div>
+        </header>
+
+        <main id="game-grid">
+            <!-- Game cards injected via JS -->
+        </main>
+    </div>
+
+    <!-- GAME PLAYER OVERLAY -->
+    <div id="play-view">
+        <div class="top-bar">
+            <button class="back-btn" onclick="closeGame()">
+                <span>⬅️</span> Back to Hub
+            </button>
+            <div id="playing-title">Loading...</div>
+            <div style="width: 100px;"></div> <!-- Spacer for center alignment -->
+        </div>
+        <iframe id="game-iframe" src="" title="Game Player" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+
+    <script>
+        /**
+         * SCALABLE GAME DATABASE
+         * To add a new game, simply add a new object to this array.
+         * The portal will automatically render it and make it searchable.
+         * Note: 'url' must point to the relative HTML file.
+         */
+        const gamesDatabase = [
+            {
+                id: 'tank-wars',
+                title: 'Colorful Tank Wars',
+                url: './tank_game.html',
+                icon: '🚀',
+                bgColor: '#ef4444',
+                tags: ['2-player', 'action', 'physics']
+            },
+            {
+                id: 'honey-catch',
+                title: 'Honey Jar Catch',
+                url: './honey_catch.html',
+                icon: '🍯',
+                bgColor: '#f59e0b',
+                tags: ['kids', 'casual', 'catch']
+            },
+            {
+                id: 'masha-bear',
+                title: 'Masha & The Bear',
+                url: './masha_bear.html',
+                icon: '🐻',
+                bgColor: '#10b981',
+                tags: ['survival', 'chase', 'kids']
+            },
+            {
+                id: 'smiley-shooter',
+                title: 'Smiley Shooter',
+                url: './smiley_shooter_v2.html',
+                icon: '👧🔫',
+                bgColor: '#3b82f6',
+                tags: ['shooter', 'casual', 'levels']
+            },
+            {
+                id: 'unicorn-phaser',
+                title: 'Unicorn Rescue (2D)',
+                url: './phaser_unicorn_shark.html',
+                icon: '🦄',
+                bgColor: '#8b5cf6',
+                tags: ['phaser3', 'boss-fight', 'platformer']
+            },
+            {
+                id: 'unicorn-3d',
+                title: 'Unicorn Rescue (3D)',
+                url: './threejs_unicorn_shark.html',
+                icon: '🦈',
+                bgColor: '#06b6d4',
+                tags: ['three.js', '3d', 'boss-fight']
+            }
+        ];
+
+        // DOM Elements
+        const gameGrid = document.getElementById('game-grid');
+        const searchBar = document.getElementById('search-bar');
+        const homeView = document.getElementById('home-view');
+        const playView = document.getElementById('play-view');
+        const gameIframe = document.getElementById('game-iframe');
+        const playingTitle = document.getElementById('playing-title');
+
+        // Render Games Function
+        function renderGames(games) {
+            gameGrid.innerHTML = '';
+
+            if (games.length === 0) {
+                gameGrid.innerHTML = `<div class="no-results">No games found matching your search. 😢</div>`;
+                return;
+            }
+
+            games.forEach(game => {
+                // Create Card
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.onclick = () => openGame(game);
+
+                // Create tags HTML
+                const tagsHtml = game.tags.map(tag => `<span class="tag">${tag}</span>`).join('');
+
+                // Card HTML Structure
+                card.innerHTML = `
+                    <div class="game-icon" style="background: linear-gradient(135deg, ${game.bgColor}99, ${game.bgColor});">
+                        ${game.icon}
+                    </div>
+                    <div class="game-info">
+                        <div class="game-title">${game.title}</div>
+                        <div class="game-tags">
+                            ${tagsHtml}
+                        </div>
+                    </div>
+                `;
+
+                gameGrid.appendChild(card);
+            });
+        }
+
+        // Open Game in iframe
+        function openGame(game) {
+            // Hide Home, Show Player
+            homeView.style.display = 'none';
+            playView.style.display = 'flex';
+
+            // Set data
+            playingTitle.innerText = game.title;
+            gameIframe.src = game.url;
+
+            // Focus iframe so keyboard controls work immediately
+            setTimeout(() => {
+                gameIframe.focus();
+            }, 100);
+        }
+
+        // Close Game and return to Hub
+        function closeGame() {
+            // Hide Player, Show Home
+            playView.style.display = 'none';
+            homeView.style.display = 'block';
+
+            // Clear iframe src to stop game execution and audio
+            gameIframe.src = '';
+        }
+
+        // Search Filtering Logic
+        searchBar.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+
+            const filteredGames = gamesDatabase.filter(game => {
+                const titleMatch = game.title.toLowerCase().includes(searchTerm);
+                const tagMatch = game.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+                return titleMatch || tagMatch;
+            });
+
+            renderGames(filteredGames);
+        });
+
+        // Initial Render
+        renderGames(gamesDatabase);
+    </script>
+</body>
+</html>

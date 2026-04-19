@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlayCanvas Unicorn Rescue & Shark Boss</title>
+    <!-- Load PlayCanvas Engine -->
+    <script src="https://code.playcanvas.com/playcanvas-stable.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: calc(100% - 40px);
+            display: flex;
+            justify-content: space-between;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+            pointer-events: none;
+        }
+        #boss-ui {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            text-align: center;
+            display: none;
+            z-index: 10;
+        }
+        #boss-hp-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border: 3px solid #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        #boss-hp-fill {
+            width: 100%;
+            height: 100%;
+            background: #ff0000;
+            transition: width 0.1s;
+        }
+        #center-message {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 64px;
+            font-weight: bold;
+            color: #FF5252;
+            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            display: none;
+            z-index: 15;
+            text-align: center;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+        #overlay h2 {
+            font-size: 64px;
+            color: #FF5252;
+            margin: 0 0 20px 0;
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 24px;
+            background-color: #E040FB;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #9C27B0;
+        }
+        button:active {
+            box-shadow: 0 2px 0 #9C27B0;
+            transform: translateY(4px);
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div>Score: <span id="score">0</span></div>
+        <div>Phase: <span id="phase-text" style="color: #E040FB;">Rescue</span></div>
+    </div>
+
+    <div id="boss-ui">
+        <div style="color: #FF5252; font-weight: bold; font-size: 24px; text-shadow: 1px 1px 2px #000;">SHARK BOSS</div>
+        <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
+    </div>
+
+    <div id="center-message">SHARK ATTACK!</div>
+
+    <div class="controls">
+        <strong>Rescue:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
+        <strong>Boss Fight:</strong> ⬅️ ➡️ to Move | <strong>Spacebar</strong> to Shoot
+    </div>
+
+    <canvas id="application-canvas"></canvas>
+
+    <div id="overlay">
+        <h2>Game Over!</h2>
+        <button onclick="location.reload()">Play Again</button>
+    </div>
+
+    <script>
+        // Create a PlayCanvas application
+        const canvas = document.getElementById('application-canvas');
+        const app = new pc.Application(canvas, {
+            keyboard: new pc.Keyboard(window)
+        });
+
+        app.start();
+        app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
+        app.setCanvasResolution(pc.RESOLUTION_AUTO);
+
+        window.addEventListener('resize', function () {
+            app.resizeCanvas();
+        });
+
+        // 1. Create Camera
+        const camera = new pc.Entity('camera');
+        camera.addComponent('camera', {
+            clearColor: new pc.Color(0.53, 0.81, 0.92) // Sky Blue
+        });
+        camera.setPosition(0, 5, 25);
+        // Look slightly down
+        camera.setEulerAngles(-10, 0, 0); 
+        app.root.addChild(camera);
+
+        // 2. Create Light
+        const light = new pc.Entity('light');
+        light.addComponent('light', {
+            type: "directional",
+            color: new pc.Color(1, 1, 1),
+            intensity: 1,
+            castShadows: true,
+            shadowResolution: 1024
+        });
+        light.setEulerAngles(45, 45, 0);
+        app.root.addChild(light);
+
+        // --- Materials ---
+        function createMaterial(r, g, b, alpha = 1) {
+            const material = new pc.StandardMaterial();
+            material.diffuse = new pc.Color(r, g, b);
+            if (alpha < 1) {
+                material.blendType = pc.BLEND_NORMAL;
+                material.opacity = alpha;
+            }
+            material.update();
+            return material;
+        }
+
+        const rabbitMat = createMaterial(1, 1, 1); // White
+        const pinkMat = createMaterial(0.88, 0.25, 0.98); // #E040FB
+        const earMat = createMaterial(1, 0.7, 0.7); // Pinkish
+        const waterMat = createMaterial(0.01, 0.53, 0.82, 0.8); // Blue, transparent
+        const islandMat = createMaterial(0.3, 0.69, 0.31); // Green
+        const sharkMat = createMaterial(0.38, 0.49, 0.55); // Grey
+        const redMat = createMaterial(1, 0, 0); // Red
+        const yellowMat = createMaterial(1, 1, 0); // Yellow
+
+        // --- Entities ---
+
+        // Pond / Water
+        const water = new pc.Entity('water');
+        water.addComponent('render', {
+            type: 'plane',
+            material: waterMat,
+            castShadows: false,
+            receiveShadows: true
+        });
+        water.setLocalScale(60, 1, 40);
+        water.setPosition(0, -2, 0);
+        app.root.addChild(water);
+
+        // Island
+        const island = new pc.Entity('island');
+        island.addComponent('render', {
+            type: 'cylinder',
+            material: islandMat,
+            castShadows: false,
+            receiveShadows: true
+        });
+        island.setLocalScale(16, 1, 16);
+        island.setPosition(0, -1.5, 0);
+        app.root.addChild(island);
+
+        // Player (Rabbit)
+        const player = new pc.Entity('player');
+        app.root.addChild(player);
+        player.setPosition(0, 0.75, 0);
+
+        const body = new pc.Entity('body');
+        body.addComponent('render', { type: 'box', material: rabbitMat, castShadows: true });
+        body.setLocalScale(1.5, 1.5, 1.5);
+        player.addChild(body);
+
+        const leftEar = new pc.Entity('leftEar');
+        leftEar.addComponent('render', { type: 'box', material: earMat });
+        leftEar.setLocalScale(0.3, 1, 0.3);
+        leftEar.setLocalPosition(-0.4, 1.2, 0);
+        player.addChild(leftEar);
+
+        const rightEar = new pc.Entity('rightEar');
+        rightEar.addComponent('render', { type: 'box', material: earMat });
+        rightEar.setLocalScale(0.3, 1, 0.3);
+        rightEar.setLocalPosition(0.4, 1.2, 0);
+        player.addChild(rightEar);
+
+        // Shark Boss
+        const shark = new pc.Entity('shark');
+        app.root.addChild(shark);
+        shark.setPosition(0, -2, 0);
+        shark.enabled = false; // Hide initially
+
+        const sharkBody = new pc.Entity('sharkBody');
+        sharkBody.addComponent('render', { type: 'cylinder', material: sharkMat, castShadows: true });
+        // Scale to make it torpedo-like (longer along Z before rotation)
+        sharkBody.setLocalScale(1.5, 6, 1.5);
+        sharkBody.setEulerAngles(0, 0, 90); // Lay flat
+        shark.addChild(sharkBody);
+
+        const sharkFin = new pc.Entity('sharkFin');
+        sharkFin.addComponent('render', { type: 'cone', material: sharkMat });
+        sharkFin.setLocalScale(0.8, 1.5, 0.8);
+        sharkFin.setLocalPosition(0, 1.5, 0);
+        shark.addChild(sharkFin);
+
+        // --- Game State ---
+        let score = 0;
+        let phase = 'rescue';
+        let targetBossScore = 200;
+        let gameOver = false;
+
+        let unicorns = [];
+        let bullets = [];
+        let lastFired = 0;
+
+        let playerState = { vy: 0, isJumping: false, speed: 15, bounds: 15 };
+        let sharkData = { hp: 10, maxHp: 10, speed: 10, dir: 1, state: 'swimming', vy: 0 };
+
+        // UI Elements
+        const scoreEl = document.getElementById('score');
+        const phaseEl = document.getElementById('phase-text');
+        const bossUI = document.getElementById('boss-ui');
+        const hpFill = document.getElementById('boss-hp-fill');
+        const centerMsg = document.getElementById('center-message');
+        const overlay = document.getElementById('overlay');
+
+        // Helpers
+        function checkCollision(entity1, entity2, dist) {
+            const p1 = entity1.getPosition();
+            const p2 = entity2.getPosition();
+            // Simple distance check
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dz = p1.z - p2.z;
+            return Math.sqrt(dx*dx + dy*dy + dz*dz) < dist;
+        }
+
+        function triggerBoss() {
+            phase = 'boss';
+            phaseEl.innerText = "BOSS FIGHT!";
+            phaseEl.style.color = '#FF5252';
+
+            // Cleanup unicorns
+            unicorns.forEach(u => u.entity.destroy());
+            unicorns = [];
+
+            // Ascend player
+            player.setPosition(player.getPosition().x, 12, 0);
+            body.render.material = pinkMat; // Riding unicorn color
+            island.setPosition(0, -10, 0); // Sink island
+
+            // Setup Boss
+            sharkData.hp = 10 + (targetBossScore/200) * 5;
+            sharkData.maxHp = sharkData.hp;
+            sharkData.speed = 10 + (targetBossScore/200) * 2;
+            shark.enabled = true;
+            shark.setPosition(0, -2, 0);
+            sharkData.state = 'swimming';
+            sharkData.dir = 1;
+
+            // Fix shark rotation for PlayCanvas
+            sharkBody.setEulerAngles(0, 0, 90); 
+
+            bossUI.style.display = 'block';
+            hpFill.style.width = '100%';
+
+            centerMsg.innerText = "SHARK ATTACK!";
+            centerMsg.style.display = 'block';
+            setTimeout(() => centerMsg.style.display = 'none', 2000);
+        }
+
+        function defeatBoss() {
+            score += 50;
+            targetBossScore += 200;
+            scoreEl.innerText = score;
+
+            phase = 'rescue';
+            phaseEl.innerText = "Rescue";
+            phaseEl.style.color = '#E040FB';
+
+            // Reset player
+            player.setPosition(player.getPosition().x, 0.75, 0);
+            body.render.material = rabbitMat;
+            island.setPosition(0, -1.5, 0);
+
+            // Hide Boss
+            shark.enabled = false;
+            bossUI.style.display = 'none';
+            bullets.forEach(b => b.destroy());
+            bullets = [];
+
+            centerMsg.innerText = "BOSS DEFEATED!";
+            centerMsg.style.display = 'block';
+            setTimeout(() => centerMsg.style.display = 'none', 2000);
+        }
+
+        // --- Main Game Loop (Script System) ---
+
+        // Define a script to attach to the root to run the update loop
+        var GameController = pc.createScript('gameController');
+
+        GameController.prototype.update = function (dt) {
+            if (gameOver) return;
+
+            const pos = player.getPosition();
+
+            // Player Movement (Left/Right)
+            if (app.keyboard.isPressed(pc.KEY_LEFT)) {
+                player.setPosition(pos.x - playerState.speed * dt, pos.y, pos.z);
+            }
+            if (app.keyboard.isPressed(pc.KEY_RIGHT)) {
+                player.setPosition(pos.x + playerState.speed * dt, pos.y, pos.z);
+            }
+
+            // Constrain
+            if (player.getPosition().x < -playerState.bounds) player.setPosition(-playerState.bounds, pos.y, pos.z);
+            if (player.getPosition().x > playerState.bounds) player.setPosition(playerState.bounds, pos.y, pos.z);
+
+            if (phase === 'rescue') {
+                // Jump Logic
+                if (app.keyboard.isPressed(pc.KEY_UP) && !playerState.isJumping) {
+                    playerState.vy = 20; // Jump strength scaled for dt
+                    playerState.isJumping = true;
+                }
+
+                if (playerState.isJumping) {
+                    playerState.vy -= 40 * dt; // Gravity
+                    player.setPosition(player.getPosition().x, player.getPosition().y + playerState.vy * dt, pos.z);
+
+                    if (player.getPosition().y <= 0.75) {
+                        player.setPosition(player.getPosition().x, 0.75, pos.z);
+                        playerState.isJumping = false;
+                        playerState.vy = 0;
+                    }
+                }
+
+                // Spawn Unicorns
+                if (Math.random() < 0.02) {
+                    const u = new pc.Entity();
+                    u.addComponent('render', { type: 'sphere', material: pinkMat, castShadows: true });
+                    u.setLocalScale(2, 2, 2);
+                    u.setPosition((Math.random() - 0.5) * 30, 20, 0);
+                    app.root.addChild(u);
+                    unicorns.push({ entity: u, speed: 5 + Math.random() * 5 });
+                }
+
+                // Update Unicorns
+                for (let i = unicorns.length - 1; i >= 0; i--) {
+                    let u = unicorns[i];
+                    const upos = u.entity.getPosition();
+                    u.entity.setPosition(upos.x, upos.y - u.speed * dt, upos.z);
+
+                    // Rotate
+                    const rot = u.entity.getLocalEulerAngles();
+                    u.entity.setLocalEulerAngles(rot.x + 90*dt, rot.y + 90*dt, rot.z);
+
+                    // Catch
+                    if (checkCollision(player, u.entity, 2.5)) {
+                        u.entity.destroy();
+                        unicorns.splice(i, 1);
+                        score += 20;
+                        scoreEl.innerText = score;
+                        if (score >= targetBossScore) triggerBoss();
+                        continue;
+                    }
+
+                    // Miss
+                    if (upos.y < -5) {
+                        u.entity.destroy();
+                        unicorns.splice(i, 1);
+                    }
+                }
+            } 
+            else if (phase === 'boss') {
+
+                // Shoot Logic
+                if (app.keyboard.isPressed(pc.KEY_SPACE)) {
+                    let now = Date.now();
+                    if (now - lastFired > 300) {
+                        lastFired = now;
+                        const b = new pc.Entity();
+                        b.addComponent('render', { type: 'sphere', material: yellowMat });
+                        b.setLocalScale(0.8, 0.8, 0.8);
+                        const pPos = player.getPosition();
+                        b.setPosition(pPos.x, pPos.y - 1, pPos.z);
+                        app.root.addChild(b);
+                        bullets.push(b);
+                    }
+                }
+
+                // Update Bullets
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    let b = bullets[i];
+                    const bpos = b.getPosition();
+                    b.setPosition(bpos.x, bpos.y - 30 * dt, bpos.z);
+
+                    if (checkCollision(b, shark, 3)) {
+                        b.destroy();
+                        bullets.splice(i, 1);
+
+                        // Flash Red
+                        sharkBody.render.material = redMat;
+                        setTimeout(() => { if(shark.enabled) sharkBody.render.material = sharkMat; }, 100);
+
+                        sharkData.hp--;
+                        hpFill.style.width = (sharkData.hp / sharkData.maxHp * 100) + '%';
+
+                        if (sharkData.hp <= 0) defeatBoss();
+                        continue;
+                    }
+
+                    if (bpos.y < -5) {
+                        b.destroy();
+                        bullets.splice(i, 1);
+                    }
+                }
+
+                // Update Boss
+                const sPos = shark.getPosition();
+
+                if (sharkData.state === 'swimming') {
+                    shark.setPosition(sPos.x + sharkData.speed * sharkData.dir * dt, sPos.y, sPos.z);
+
+                    // Face direction
+                    if (sharkData.dir === 1) {
+                        shark.setEulerAngles(0, 0, 0); // Face right
+                    } else {
+                        shark.setEulerAngles(0, 180, 0); // Face left
+                    }
+
+                    if (sPos.x > 18) sharkData.dir = -1;
+                    if (sPos.x < -18) sharkData.dir = 1;
+
+                    if (Math.random() < 0.015) {
+                        sharkData.state = 'jumping';
+                        sharkData.vy = 25; // Jump strength
+                        sharkBody.setEulerAngles(0, 0, 0); // Point up
+                        shark.setEulerAngles(0, 0, 0);
+                    }
+                } 
+                else if (sharkData.state === 'jumping') {
+                    sharkData.vy -= 40 * dt; // gravity
+                    shark.setPosition(sPos.x, sPos.y + sharkData.vy * dt, sPos.z);
+
+                    // Rotate based on velocity curve
+                    let targetRotZ = sharkData.vy > 0 ? 0 : -180;
+                    const curRot = sharkBody.getLocalEulerAngles();
+                    // Lerp rotation
+                    let newRotZ = pc.math.lerp(curRot.z, targetRotZ, dt * 5);
+                    sharkBody.setEulerAngles(0, 0, newRotZ);
+
+                    if (shark.getPosition().y <= -2 && sharkData.vy < 0) {
+                        shark.setPosition(sPos.x, -2, sPos.z);
+                        sharkData.state = 'swimming';
+                        sharkBody.setEulerAngles(0, 0, 90); // Lay flat again
+                        sharkData.dir = Math.random() > 0.5 ? 1 : -1;
+                    }
+                }
+
+                // Game Over Check (Player Eaten)
+                if (checkCollision(player, shark, 3.5)) {
+                    gameOver = true;
+                    body.render.material = redMat;
+                    overlay.style.display = 'flex';
+                }
+            }
+        };
+
+        // Add the script to the root entity so it runs
+        app.root.addComponent('script');
+        app.root.script.create('gameController');
+
+    </script>
+</body>
+</html>

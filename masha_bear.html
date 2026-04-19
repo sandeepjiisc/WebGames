@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masha and the Bear: Pond Rescue</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #4CAF50; /* Grass green */
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+            color: white;
+        }
+        h1 {
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-size: 32px;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 6px solid #8D6E63;
+            background-color: #81C784;
+        }
+        canvas {
+            display: block;
+        }
+        #message-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+        #message-overlay h2 {
+            font-size: 40px;
+            color: #FFEB3B;
+            margin: 0 0 15px 0;
+            text-shadow: 2px 2px 4px #000;
+            padding: 0 20px;
+        }
+        #message-overlay p {
+            font-size: 24px;
+            margin: 0 0 30px 0;
+            color: white;
+            padding: 0 20px;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 20px;
+            font-family: inherit;
+            background-color: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #E65100;
+            transition: all 0.1s;
+        }
+        button:active {
+            box-shadow: 0 0 0 #E65100;
+            transform: translateY(4px);
+        }
+        .controls {
+            margin-top: 10px;
+            background: rgba(0,0,0,0.4);
+            padding: 10px 20px;
+            border-radius: 15px;
+            font-size: 16px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🐻 Run from Masha! 👧</h1>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="550"></canvas>
+        <div id="message-overlay">
+            <h2 id="end-title">Game Over!</h2>
+            <p id="end-desc">Masha caught you!</p>
+            <button onclick="resetGame()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <strong>Controls:</strong> Use Arrow Keys (⬆️⬇️⬅️➡️) to move the Bear.<br>
+        Avoid Masha! Don't fall into the blue pond!
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('message-overlay');
+        const endTitle = document.getElementById('end-title');
+        const endDesc = document.getElementById('end-desc');
+
+        // Game State
+        let gameState = 'playing'; // playing, caught, pond_event
+        let timer = 0;
+        let pondTimer = 0;
+
+        // Inputs
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = true;
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = false;
+                e.preventDefault();
+            }
+        });
+
+        // Entities
+        const pond = {
+            x: 400,
+            y: 275,
+            radiusX: 180,
+            radiusY: 120
+        };
+
+        const bear = {
+            x: 100, y: 100, size: 40, speed: 4.5, emoji: '🐻'
+        };
+
+        const masha = {
+            x: 700, y: 450, size: 30, speed: 2.5, emoji: '👧🏼'
+        };
+
+        const shark = {
+            x: pond.x, y: pond.y, size: 50, speed: 2, active: false, emoji: '🦈'
+        };
+
+        function drawPond() {
+            ctx.fillStyle = '#29B6F6'; // Water blue
+            ctx.beginPath();
+            ctx.ellipse(pond.x, pond.y, pond.radiusX, pond.radiusY, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pond border / ripple
+            ctx.strokeStyle = '#039BE5';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.ellipse(pond.x, pond.y, pond.radiusX - 20, pond.radiusY - 15, 0, 0, Math.PI * 2);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function drawEntity(entity) {
+            ctx.font = entity.size + 'px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(entity.emoji, entity.x, entity.y);
+        }
+
+        function isPointInPond(x, y) {
+            // Ellipse equation: (x-h)^2 / a^2 + (y-k)^2 / b^2 <= 1
+            const dx = x - pond.x;
+            const dy = y - pond.y;
+            const value = (dx * dx) / (pond.radiusX * pond.radiusX) + (dy * dy) / (pond.radiusY * pond.radiusY);
+            return value <= 0.8; // 0.8 to make the hit box slightly smaller than the visual edge
+        }
+
+        function getDistance(x1, y1, x2, y2) {
+            return Math.hypot(x2 - x1, y2 - y1);
+        }
+
+        function update() {
+            if (gameState === 'playing') {
+                // Move Bear
+                if (keys.ArrowUp) bear.y -= bear.speed;
+                if (keys.ArrowDown) bear.y += bear.speed;
+                if (keys.ArrowLeft) bear.x -= bear.speed;
+                if (keys.ArrowRight) bear.x += bear.speed;
+
+                // Keep Bear in bounds
+                bear.x = Math.max(20, Math.min(canvas.width - 20, bear.x));
+                bear.y = Math.max(20, Math.min(canvas.height - 20, bear.y));
+
+                // Move Masha towards Bear
+                const dx = bear.x - masha.x;
+                const dy = bear.y - masha.y;
+                const dist = getDistance(bear.x, bear.y, masha.x, masha.y);
+
+                if (dist > 0) {
+                    masha.x += (dx / dist) * masha.speed;
+                    masha.y += (dy / dist) * masha.speed;
+                }
+
+                // Check collision with Masha
+                if (dist < 35) {
+                    gameState = 'caught';
+                    endTitle.innerText = "Oh no! Masha caught you!";
+                    endTitle.style.color = "#FF9800";
+                    endDesc.innerText = "You survived for " + Math.floor(timer/60) + " seconds.";
+                    overlay.style.display = 'flex';
+                }
+
+                // Check collision with Pond
+                if (isPointInPond(bear.x, bear.y)) {
+                    gameState = 'pond_event';
+                    shark.active = true;
+                    // Position shark at the opposite side of the pond from the bear
+                    shark.x = pond.x + (pond.x - bear.x)*0.5;
+                    shark.y = pond.y + (pond.y - bear.y)*0.5;
+                }
+
+                timer++;
+            } 
+            else if (gameState === 'pond_event') {
+                pondTimer++;
+
+                // Bear slowly sinks/drifts to center
+                bear.x += (pond.x - bear.x) * 0.02;
+                bear.y += (pond.y - bear.y) * 0.02;
+
+                // Shark swims towards bear
+                const sdx = bear.x - shark.x;
+                const sdy = bear.y - shark.y;
+                const sdist = getDistance(bear.x, bear.y, shark.x, shark.y);
+                if (sdist > 20) {
+                    shark.x += (sdx / sdist) * shark.speed;
+                    shark.y += (sdy / sdist) * shark.speed;
+                }
+
+                // Masha runs to the edge of the pond to save Bear
+                const mdx = bear.x - masha.x;
+                const mdy = bear.y - masha.y;
+                const mdist = getDistance(bear.x, bear.y, masha.x, masha.y);
+
+                if (mdist > 80) { // She stops at the edge
+                    masha.x += (mdx / mdist) * (masha.speed * 1.5);
+                    masha.y += (mdy / mdist) * (masha.speed * 1.5);
+                }
+
+                // Trigger ending after a short animation (approx 2.5 seconds at 60fps)
+                if (pondTimer > 150) {
+                    gameState = 'rescued';
+                    endTitle.innerText = "Shark Attack!";
+                    endTitle.style.color = "#F44336";
+                    endDesc.innerText = "You fell in the pond! A giant shark attacked, but Masha pulled you out just in time!";
+                    overlay.style.display = 'flex';
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw decorative grass dots
+            ctx.fillStyle = '#66BB6A';
+            for(let i=0; i<30; i++) {
+                // Static seed for decoration to avoid flashing (cheating with math)
+                let gx = (Math.sin(i*123) * 0.5 + 0.5) * canvas.width;
+                let gy = (Math.cos(i*321) * 0.5 + 0.5) * canvas.height;
+                ctx.beginPath();
+                ctx.arc(gx, gy, 4, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            drawPond();
+
+            if (shark.active) drawEntity(shark);
+
+            // If in pond, make bear look semi-submerged (opacity)
+            if (gameState === 'pond_event') {
+                ctx.globalAlpha = 0.7;
+            }
+            drawEntity(bear);
+            ctx.globalAlpha = 1.0;
+
+            drawEntity(masha);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            bear.x = 100; bear.y = 100;
+            masha.x = 700; masha.y = 450;
+            shark.active = false;
+            gameState = 'playing';
+            timer = 0;
+            pondTimer = 0;
+            overlay.style.display = 'none';
+        }
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
