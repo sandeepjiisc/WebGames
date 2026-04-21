@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Honey Jar Catch!</title>
     <style>
         body {
@@ -14,12 +14,14 @@
             flex-direction: column;
             align-items: center;
             overflow: hidden;
+            touch-action: none;
         }
         h1 {
             color: #FF8C00;
             text-shadow: 2px 2px 0px #fff, -2px -2px 0px #fff, 2px -2px 0px #fff, -2px 2px 0px #fff;
             margin: 10px 0;
-            font-size: 36px;
+            font-size: 28px;
+            text-align: center;
         }
         #game-container {
             position: relative;
@@ -28,15 +30,20 @@
             overflow: hidden;
             border: 5px solid #FFD700;
             background: linear-gradient(180deg, #A1EAFF 0%, #E2F9FF 100%);
+            width: 95%;
+            max-width: 600px;
+            aspect-ratio: 6 / 5;
         }
         canvas {
             display: block;
+            width: 100%;
+            height: 100%;
         }
         #score-board {
             position: absolute;
-            top: 15px;
-            left: 20px;
-            font-size: 28px;
+            top: 10px;
+            left: 15px;
+            font-size: 24px;
             font-weight: bold;
             color: #FF1493;
             text-shadow: 2px 2px 0px #fff;
@@ -56,18 +63,20 @@
             z-index: 10;
         }
         #game-over h2 {
-            font-size: 48px;
+            font-size: 36px;
             color: #FF3333;
-            margin: 0 0 20px 0;
+            margin: 0 0 15px 0;
             text-shadow: 2px 2px 4px #000;
+            text-align: center;
         }
         #game-over p {
-            font-size: 24px;
-            margin: 0 0 30px 0;
+            font-size: 20px;
+            margin: 0 0 20px 0;
+            text-align: center;
         }
         button {
-            padding: 15px 30px;
-            font-size: 24px;
+            padding: 12px 24px;
+            font-size: 20px;
             font-family: inherit;
             background-color: #4CAF50;
             color: white;
@@ -76,19 +85,62 @@
             cursor: pointer;
             box-shadow: 0 5px 0 #2E8B57;
             transition: all 0.1s;
+            touch-action: manipulation;
         }
         button:active {
             box-shadow: 0 2px 0 #2E8B57;
             transform: translateY(3px);
         }
         #instructions {
-            margin-top: 15px;
-            font-size: 18px;
+            margin-top: 10px;
+            font-size: 16px;
             color: #333;
             background: rgba(255, 255, 255, 0.8);
-            padding: 10px 20px;
-            border-radius: 20px;
+            padding: 10px;
+            border-radius: 15px;
             text-align: center;
+            width: 90%;
+            max-width: 600px;
+            box-sizing: border-box;
+        }
+
+        #mobile-controls {
+            display: flex;
+            width: 95%;
+            max-width: 600px;
+            justify-content: space-between;
+            margin-top: 10px;
+            gap: 10px;
+        }
+        .mobile-btn {
+            flex: 1;
+            padding: 15px;
+            background: rgba(255, 140, 0, 0.8);
+            border: 3px solid #FFD700;
+            color: white;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            user-select: none;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: 0 4px 0 #CD853F;
+        }
+        .mobile-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 #CD853F;
+        }
+
+        @media screen and (min-width: 768px) {
+            #mobile-controls { display: none; }
+            h1 { font-size: 36px; }
+            #instructions { font-size: 18px; padding: 10px 20px; }
+        }
+
+        @media screen and (max-height: 600px) {
+            h1 { display: none; }
+            #instructions { display: none; }
         }
     </style>
 </head>
@@ -108,8 +160,13 @@
         </div>
     </div>
 
+    <div id="mobile-controls">
+        <div class="mobile-btn" id="btn-left">⬅️ LEFT</div>
+        <div class="mobile-btn" id="btn-right">RIGHT ➡️</div>
+    </div>
+
     <div id="instructions">
-        <strong>How to play:</strong> Use ⬅️ and ➡️ arrow keys to move the honey jar.<br>
+        <strong>How to play:</strong> Use ⬅️ and ➡️ buttons or arrow keys to move the honey jar.<br>
         Catch the happy smileys for points! Avoid the 🔴 <strong>red angry smileys</strong>!
     </div>
 
@@ -146,6 +203,69 @@
             }
         });
 
+        // Touch Controls
+        function bindTouch(id, code) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const start = (e) => { e.preventDefault(); keys[code] = true; };
+            const end = (e) => { e.preventDefault(); keys[code] = false; };
+            el.addEventListener('touchstart', start, {passive: false});
+            el.addEventListener('mousedown', start);
+            el.addEventListener('touchend', end);
+            el.addEventListener('mouseup', end);
+            el.addEventListener('mouseleave', end);
+        }
+        bindTouch('btn-left', 'ArrowLeft');
+        bindTouch('btn-right', 'ArrowRight');
+
+        // Handle resizing for proper coordinate mapping
+        let scaleX = 1;
+        let scaleY = 1;
+
+        function updateScale() {
+            const rect = canvas.getBoundingClientRect();
+            scaleX = canvas.width / rect.width;
+            scaleY = canvas.height / rect.height;
+        }
+
+        window.addEventListener('resize', updateScale);
+        // Call once initially but delay slightly to ensure DOM is ready
+        setTimeout(updateScale, 100);
+
+        // Drag Jar with touch directly on canvas
+        let isDragging = false;
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (isGameOver) return;
+            e.preventDefault();
+            updateScale();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (touch.clientX - rect.left) * scaleX;
+
+            // Check if touch is near jar
+            if (touchX >= jar.x - 30 && touchX <= jar.x + jar.width + 30) {
+                isDragging = true;
+                jar.x = touchX - jar.width / 2;
+            }
+        }, {passive: false});
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (isGameOver || !isDragging) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (touch.clientX - rect.left) * scaleX;
+
+            jar.x = touchX - jar.width / 2;
+
+            // Constrain
+            if (jar.x < 0) jar.x = 0;
+            if (jar.x + jar.width > canvas.width) jar.x = canvas.width - jar.width;
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', () => { isDragging = false; });
+
         // Jar Object
         const jar = {
             x: canvas.width / 2 - 40,
@@ -156,7 +276,7 @@
 
             draw() {
                 // Jar body
-                ctx.fillStyle = '#DAA520'; // Goldenrod
+                ctx.fillStyle = '#DAA520'; 
                 ctx.beginPath();
                 ctx.moveTo(this.x + 10, this.y + 20);
                 ctx.lineTo(this.x + this.width - 10, this.y + 20);
@@ -166,13 +286,13 @@
                 ctx.fill();
 
                 // Jar rim
-                ctx.fillStyle = '#B8860B'; // DarkGoldenrod
+                ctx.fillStyle = '#B8860B'; 
                 ctx.beginPath();
                 ctx.roundRect(this.x + 5, this.y + 5, this.width - 10, 15, 5);
                 ctx.fill();
 
                 // Honey inside
-                ctx.fillStyle = '#FFD700'; // Gold
+                ctx.fillStyle = '#FFD700'; 
                 ctx.beginPath();
                 ctx.ellipse(this.x + this.width/2, this.y + 20, this.width/2 - 15, 5, 0, 0, Math.PI * 2);
                 ctx.fill();
@@ -200,10 +320,10 @@
         const smileys = [];
 
         const smileyTypes = [
-            { color: '#FFD700', type: 'happy', points: 10 },    // Yellow
-            { color: '#00FFFF', type: 'happy', points: 15 },    // Cyan (faster maybe)
-            { color: '#FF69B4', type: 'happy', points: 20 },    // Pink
-            { color: '#FF3333', type: 'angry', points: 0 }      // Red (Game over)
+            { color: '#FFD700', type: 'happy', points: 10 },    
+            { color: '#00FFFF', type: 'happy', points: 15 },    
+            { color: '#FF69B4', type: 'happy', points: 20 },    
+            { color: '#FF3333', type: 'angry', points: 0 }      
         ];
 
         class Smiley {
@@ -212,24 +332,20 @@
                 this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
                 this.y = -this.radius;
 
-                // Increase difficulty (speed) as score goes up
                 const speedMultiplier = 1 + (score / 150);
                 this.speed = (Math.random() * 2 + 2) * speedMultiplier; 
 
-                // 25% chance for a red angry smiley, else pick a random happy one
                 const rand = Math.random();
                 if (rand < 0.25) {
-                    this.data = smileyTypes[3]; // Angry Red
+                    this.data = smileyTypes[3]; 
                 } else {
-                    this.data = smileyTypes[Math.floor(Math.random() * 3)]; // Happy Colors
+                    this.data = smileyTypes[Math.floor(Math.random() * 3)]; 
                 }
 
-                // Cyan ones are faster
                 if(this.data.color === '#00FFFF') this.speed *= 1.5;
             }
 
             draw() {
-                // Face circle
                 ctx.fillStyle = this.data.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -238,22 +354,17 @@
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
-                // Eyes
                 ctx.fillStyle = '#333';
                 ctx.beginPath();
-                ctx.arc(this.x - 7, this.y - 4, 3, 0, Math.PI * 2); // Left eye
-                ctx.arc(this.x + 7, this.y - 4, 3, 0, Math.PI * 2); // Right eye
+                ctx.arc(this.x - 7, this.y - 4, 3, 0, Math.PI * 2); 
+                ctx.arc(this.x + 7, this.y - 4, 3, 0, Math.PI * 2); 
                 ctx.fill();
 
-                // Mouth
                 ctx.beginPath();
                 if (this.data.type === 'happy') {
-                    // Smile
                     ctx.arc(this.x, this.y + 2, 10, 0, Math.PI);
                 } else {
-                    // Frown
                     ctx.arc(this.x, this.y + 12, 10, Math.PI, Math.PI * 2);
-                    // Angry eyebrows
                     ctx.moveTo(this.x - 12, this.y - 12);
                     ctx.lineTo(this.x - 4, this.y - 8);
                     ctx.moveTo(this.x + 12, this.y - 12);
@@ -268,7 +379,6 @@
         }
 
         function spawnSmiley() {
-            // Spawn rate gets faster as score increases
             const spawnRate = Math.max(30, 80 - Math.floor(score / 5)); 
             if (frameCount % spawnRate === 0) {
                 smileys.push(new Smiley());
@@ -279,7 +389,6 @@
             for (let i = 0; i < smileys.length; i++) {
                 const s = smileys[i];
 
-                // Simple AABB box collision checking if circle center is inside jar top area
                 if (s.y + s.radius > jar.y + 10 && 
                     s.y - s.radius < jar.y + 30 && 
                     s.x > jar.x && 
@@ -290,7 +399,7 @@
                     } else {
                         score += s.data.points;
                         scoreElement.innerText = score;
-                        // Pop effect
+
                         createParticles(s.x, s.y, s.data.color);
                         smileys.splice(i, 1);
                         i--;
@@ -299,7 +408,6 @@
             }
         }
 
-        // Particle effect array
         const particles = [];
         function createParticles(x, y, color) {
             for(let i=0; i<8; i++){
@@ -340,7 +448,8 @@
             finalScoreElement.innerText = score;
         }
 
-        function resetGame() {
+        // Make resetGame globally available for the button
+        window.resetGame = function() {
             score = 0;
             scoreElement.innerText = score;
             smileys.length = 0;
@@ -349,41 +458,36 @@
             isGameOver = false;
             frameCount = 0;
             gameOverScreen.style.display = 'none';
-            gameLoop();
         }
 
         function gameLoop() {
-            if (isGameOver) return;
+            if (!isGameOver) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                jar.update();
+                jar.draw();
 
-            // Draw and update
-            jar.update();
-            jar.draw();
+                spawnSmiley();
 
-            spawnSmiley();
+                for (let i = 0; i < smileys.length; i++) {
+                    const s = smileys[i];
+                    s.update();
+                    s.draw();
 
-            for (let i = 0; i < smileys.length; i++) {
-                const s = smileys[i];
-                s.update();
-                s.draw();
-
-                // Remove if off screen
-                if (s.y - s.radius > canvas.height) {
-                    smileys.splice(i, 1);
-                    i--;
+                    if (s.y - s.radius > canvas.height) {
+                        smileys.splice(i, 1);
+                        i--;
+                    }
                 }
+
+                detectCollision();
+                updateParticles();
+
+                frameCount++;
             }
-
-            detectCollision();
-            updateParticles();
-
-            frameCount++;
             animationId = requestAnimationFrame(gameLoop);
         }
 
-        // Start game
         gameLoop();
     </script>
 </body>

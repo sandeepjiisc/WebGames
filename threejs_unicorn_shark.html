@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3D Unicorn Rescue & Shark Boss</title>
     <style>
         body {
@@ -11,6 +11,7 @@
             background-color: #87CEEB;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white;
+            touch-action: none;
         }
         #game-container {
             position: absolute;
@@ -22,12 +23,12 @@
         }
         #ui-layer {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            width: calc(100% - 40px);
+            top: 10px;
+            left: 10px;
+            width: calc(100% - 20px);
             display: flex;
             justify-content: space-between;
-            font-size: 28px;
+            font-size: 20px;
             font-weight: bold;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             z-index: 10;
@@ -35,19 +36,20 @@
         }
         #boss-ui {
             position: absolute;
-            top: 70px;
+            top: 50px;
             left: 50%;
             transform: translateX(-50%);
-            width: 400px;
+            width: 80%;
+            max-width: 400px;
             text-align: center;
             display: none;
             z-index: 10;
         }
         #boss-hp-bar {
             width: 100%;
-            height: 20px;
+            height: 15px;
             background: #333;
-            border: 3px solid #fff;
+            border: 2px solid #fff;
             border-radius: 10px;
             overflow: hidden;
             margin-top: 5px;
@@ -60,16 +62,17 @@
         }
         #center-message {
             position: absolute;
-            top: 40%;
+            top: 30%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 64px;
+            font-size: 40px;
             font-weight: bold;
             color: #FF5252;
-            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
             display: none;
             z-index: 15;
             text-align: center;
+            width: 100%;
         }
         #overlay {
             position: absolute;
@@ -85,7 +88,7 @@
             z-index: 20;
         }
         #overlay h2 {
-            font-size: 64px;
+            font-size: 48px;
             color: #FF5252;
             margin: 0 0 20px 0;
         }
@@ -98,21 +101,87 @@
             border-radius: 30px;
             cursor: pointer;
             box-shadow: 0 6px 0 #9C27B0;
+            touch-action: manipulation;
         }
         button:active {
             box-shadow: 0 2px 0 #9C27B0;
             transform: translateY(4px);
         }
-        .controls {
+        .controls-info {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #mobile-controls {
             position: absolute;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.5);
-            padding: 10px 20px;
-            border-radius: 10px;
-            text-align: center;
-            z-index: 10;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+            box-sizing: border-box;
+            z-index: 15;
+            gap: 10px;
+        }
+
+        .d-pad {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mobile-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .mobile-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        .action-btn {
+            background: rgba(224, 64, 251, 0.4);
+            border-color: rgba(224, 64, 251, 0.8);
+            width: 80px;
+            height: 80px;
+        }
+
+        .action-btn:active {
+            background: rgba(224, 64, 251, 0.6);
+        }
+
+        @media screen and (min-width: 768px) {
+            #ui-layer { font-size: 28px; top: 20px; left: 20px; width: calc(100% - 40px); }
+            #boss-ui { top: 70px; }
+            #boss-hp-bar { height: 20px; }
+            #center-message { font-size: 64px; }
+            .controls-info { bottom: 20px; top: auto; left: 50%; transform: translateX(-50%); font-size: 16px; padding: 10px 20px; text-align: center; pointer-events: auto;}
+            #overlay h2 { font-size: 64px; }
+            #mobile-controls { display: none; }
+        }
+
+        @media screen and (max-height: 400px) {
+            .controls-info { display: none; }
+            #mobile-controls { bottom: 10px; }
+            .mobile-btn { width: 50px; height: 50px; font-size: 24px;}
+            .action-btn { width: 60px; height: 60px; }
         }
     </style>
     <!-- Load Three.js from CDN -->
@@ -126,18 +195,26 @@
     </div>
 
     <div id="boss-ui">
-        <div style="color: #FF5252; font-weight: bold; font-size: 24px; text-shadow: 1px 1px 2px #000;">SHARK BOSS</div>
+        <div style="color: #FF5252; font-weight: bold; font-size: 20px; text-shadow: 1px 1px 2px #000;">SHARK BOSS</div>
         <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
     </div>
 
     <div id="center-message">SHARK ATTACK!</div>
 
-    <div class="controls">
-        <strong>Rescue:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
-        <strong>Boss Fight:</strong> ⬅️ ➡️ to Move | <strong>Spacebar</strong> to Shoot
+    <div class="controls-info" id="desktop-controls">
+        <strong>Rescue:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow/Action</strong> to Jump<br>
+        <strong>Boss Fight:</strong> ⬅️ ➡️ to Move | <strong>Spacebar/Action</strong> to Shoot
     </div>
 
     <div id="game-container"></div>
+
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="mobile-btn" id="btn-left">⬅️</div>
+            <div class="mobile-btn" id="btn-right">➡️</div>
+        </div>
+        <div class="mobile-btn action-btn" id="btn-action">💥</div>
+    </div>
 
     <div id="overlay">
         <h2>Game Over!</h2>
@@ -147,16 +224,21 @@
     <script>
         // --- THREE.JS SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        scene.background = new THREE.Color(0x87CEEB); 
         scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 25);
+
+        // Adjust camera position based on screen width for mobile
+        const isMobile = window.innerWidth < 768;
+        camera.position.set(0, isMobile ? 8 : 5, isMobile ? 35 : 25);
         camera.lookAt(0, 0, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
+        // Optimization for mobile
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.getElementById('game-container').appendChild(renderer.domElement);
 
         // --- LIGHTING ---
@@ -173,15 +255,11 @@
         scene.add(dirLight);
 
         // --- MATERIALS & GEOMETRIES ---
-        // We will use simple 3D primitives to represent our characters since we can't load external 3D models securely via raw HTML/JS easily.
-
-        // Rabbit (Player) - White cube with ears
         const rabbitGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
         const rabbitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
         const playerMesh = new THREE.Mesh(rabbitGeo, rabbitMat);
         playerMesh.castShadow = true;
 
-        // Ears
         const earGeo = new THREE.BoxGeometry(0.3, 1, 0.3);
         const earMat = new THREE.MeshLambertMaterial({ color: 0xffaaaa });
         const leftEar = new THREE.Mesh(earGeo, earMat);
@@ -193,8 +271,7 @@
 
         scene.add(playerMesh);
 
-        // Ground / Water
-        const pondGeo = new THREE.PlaneGeometry(60, 40);
+        const pondGeo = new THREE.PlaneGeometry(80, 60);
         const pondMat = new THREE.MeshLambertMaterial({ color: 0x0288D1, transparent: true, opacity: 0.8 });
         const pond = new THREE.Mesh(pondGeo, pondMat);
         pond.rotation.x = -Math.PI / 2;
@@ -202,7 +279,6 @@
         pond.receiveShadow = true;
         scene.add(pond);
 
-        // Island (where rabbit stands in rescue phase)
         const islandGeo = new THREE.CylinderGeometry(8, 9, 1, 32);
         const islandMat = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
         const island = new THREE.Mesh(islandGeo, islandMat);
@@ -210,28 +286,24 @@
         island.receiveShadow = true;
         scene.add(island);
 
-        // Shark Boss - Grey cylinder (torpedo shape)
         const sharkGeo = new THREE.CylinderGeometry(1.5, 0.5, 6, 8);
         const sharkMat = new THREE.MeshLambertMaterial({ color: 0x607D8B });
         const sharkMesh = new THREE.Mesh(sharkGeo, sharkMat);
-        sharkMesh.rotation.z = Math.PI / 2; // Lay flat
+        sharkMesh.rotation.z = Math.PI / 2; 
         sharkMesh.castShadow = true;
 
-        // Fin
         const finGeo = new THREE.ConeGeometry(0.8, 1.5, 4);
         const fin = new THREE.Mesh(finGeo, sharkMat);
         fin.position.set(0, 1.5, 0);
         sharkMesh.add(fin);
 
-        sharkMesh.visible = false; // Hide initially
+        sharkMesh.visible = false; 
         scene.add(sharkMesh);
 
-        // Unicorn Material (Pink/Purple Spheres)
         const unicornGeo = new THREE.SphereGeometry(1, 16, 16);
         const unicornMat = new THREE.MeshLambertMaterial({ color: 0xE040FB });
 
-        // Bullet Material (Yellow glowing spheres)
-        const bulletGeo = new THREE.SphereGeometry(0.3, 8, 8);
+        const bulletGeo = new THREE.SphereGeometry(0.4, 8, 8);
         const bulletMat = new THREE.MeshBasicMaterial({ color: 0xFFEB3B });
 
         // --- GAME STATE ---
@@ -240,27 +312,24 @@
         let targetBossScore = 200;
         let gameOver = false;
 
-        // Player Physics
         const player = {
             x: 0,
             y: 0,
             vy: 0,
-            speed: 0.25,
+            speed: isMobile ? 0.35 : 0.25, // Slightly faster on mobile to cross screen quicker
             isJumping: false,
-            bounds: 15 // Move limit left/right
+            bounds: isMobile ? 12 : 15 
         };
 
-        // Arrays for dynamic objects
         let unicorns = [];
         let bullets = [];
 
-        // Boss Data
         let sharkData = {
             hp: 10,
             maxHp: 10,
             speed: 0.15,
-            dir: 1, // 1 right, -1 left
-            state: 'swimming', // swimming, jumping
+            dir: 1, 
+            state: 'swimming', 
             vy: 0
         };
 
@@ -277,20 +346,94 @@
         window.addEventListener('keydown', (e) => {
             if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
 
-            // Jump logic
             if (e.code === 'ArrowUp' && phase === 'rescue' && !player.isJumping) {
-                player.vy = 0.6; // Jump strength
-                player.isJumping = true;
+                doJump();
             }
         });
+
         window.addEventListener('keyup', (e) => {
             if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
         });
+
         window.addEventListener('resize', () => {
+            const mobile = window.innerWidth < 768;
+            camera.position.set(0, mobile ? 8 : 5, mobile ? 35 : 25);
+            player.bounds = mobile ? 12 : 15;
+
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // Touch Controls
+        function bindTouch(id, code) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const start = (e) => { e.preventDefault(); keys[code] = true; };
+            const end = (e) => { e.preventDefault(); keys[code] = false; };
+            el.addEventListener('touchstart', start, {passive: false});
+            el.addEventListener('mousedown', start);
+            el.addEventListener('touchend', end);
+            el.addEventListener('mouseup', end);
+            el.addEventListener('mouseleave', end);
+        }
+
+        bindTouch('btn-left', 'ArrowLeft');
+        bindTouch('btn-right', 'ArrowRight');
+
+        const btnAction = document.getElementById('btn-action');
+        let touchCanAction = true;
+
+        const handleActionPress = (e) => {
+            e.preventDefault();
+            keys.Space = true;
+            if (touchCanAction) {
+                if (phase === 'rescue' && !player.isJumping) {
+                    doJump();
+                } else if (phase === 'boss') {
+                    shoot();
+                }
+                touchCanAction = false;
+            }
+        };
+
+        const handleActionRelease = (e) => {
+            e.preventDefault();
+            keys.Space = false;
+            touchCanAction = true;
+        };
+
+        btnAction.addEventListener('touchstart', handleActionPress, {passive: false});
+        btnAction.addEventListener('mousedown', handleActionPress);
+        btnAction.addEventListener('touchend', handleActionRelease);
+        btnAction.addEventListener('mouseup', handleActionRelease);
+        btnAction.addEventListener('mouseleave', handleActionRelease);
+
+        // Direct screen touch for movement
+        let isTouchingScreen = false;
+        let touchTargetX = 0;
+
+        document.getElementById('game-container').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isTouchingScreen = true;
+            updateTouchTarget(e);
+        }, {passive: false});
+
+        document.getElementById('game-container').addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            updateTouchTarget(e);
+        }, {passive: false});
+
+        document.getElementById('game-container').addEventListener('touchend', () => {
+            isTouchingScreen = false;
+        });
+
+        function updateTouchTarget(e) {
+            const touch = e.touches[0];
+            // Map screen X to world X (-bounds to +bounds)
+            const screenX = touch.clientX / window.innerWidth;
+            touchTargetX = (screenX * 2 - 1) * player.bounds * 1.5;
+        }
 
         // --- UI ELEMENTS ---
         const scoreEl = document.getElementById('score');
@@ -301,11 +444,18 @@
         const overlay = document.getElementById('overlay');
 
         // --- GAME LOGIC ---
+        function doJump() {
+            player.vy = 0.6; 
+            player.isJumping = true;
+        }
+
         function spawnUnicorn() {
             if (phase !== 'rescue' || gameOver) return;
-            if (Math.random() < 0.02) { // Roughly 1 per second at 60fps
+            if (Math.random() < 0.02) { 
                 const uMesh = new THREE.Mesh(unicornGeo, unicornMat);
-                uMesh.position.set((Math.random() - 0.5) * 30, 20, 0); // Random X, High Y
+                // Adjust spawn width based on screen size
+                const spawnWidth = isMobile ? 20 : 30;
+                uMesh.position.set((Math.random() - 0.5) * spawnWidth, 20, 0); 
                 scene.add(uMesh);
                 unicorns.push({
                     mesh: uMesh,
@@ -316,12 +466,12 @@
 
         function shoot() {
             const now = Date.now();
-            if (now - lastFired < 300) return; // Fire rate limit
+            if (now - lastFired < 300) return; 
             lastFired = now;
 
             const bMesh = new THREE.Mesh(bulletGeo, bulletMat);
             bMesh.position.copy(playerMesh.position);
-            bMesh.position.y -= 1;
+            bMesh.position.y -= 1.5;
             scene.add(bMesh);
             bullets.push(bMesh);
         }
@@ -331,17 +481,14 @@
             phaseEl.innerText = "BOSS FIGHT!";
             phaseEl.style.color = '#FF5252';
 
-            // Clear unicorns
             unicorns.forEach(u => scene.remove(u.mesh));
             unicorns = [];
 
-            // Move player to sky (Riding unicorn)
             player.y = 12;
             player.vy = 0;
-            playerMesh.material.color.setHex(0xE040FB); // Turn pink to represent riding unicorn
-            island.position.y = -10; // sink island
+            playerMesh.material.color.setHex(0xE040FB); 
+            island.position.y = -10; 
 
-            // Setup Boss
             sharkData.hp = 10 + (targetBossScore/200) * 5;
             sharkData.maxHp = sharkData.hp;
             sharkData.speed = 0.15 + (targetBossScore/200) * 0.05;
@@ -350,13 +497,18 @@
             sharkData.state = 'swimming';
             sharkData.dir = 1;
 
-            // UI
             bossUI.style.display = 'block';
             hpFill.style.width = '100%';
 
             centerMsg.innerText = "SHARK ATTACK!";
             centerMsg.style.display = 'block';
             setTimeout(() => centerMsg.style.display = 'none', 2000);
+
+            // Adjust camera for boss fight
+            if (isMobile) {
+                camera.position.z = 40;
+                camera.position.y = 10;
+            }
         }
 
         function defeatBoss() {
@@ -368,12 +520,10 @@
             phaseEl.innerText = "Rescue";
             phaseEl.style.color = '#E040FB';
 
-            // Reset player
             player.y = 0;
-            playerMesh.material.color.setHex(0xffffff); // Back to white rabbit
-            island.position.y = -1.5; // Raise island
+            playerMesh.material.color.setHex(0xffffff); 
+            island.position.y = -1.5; 
 
-            // Hide boss UI
             sharkMesh.visible = false;
             bossUI.style.display = 'none';
             bullets.forEach(b => scene.remove(b));
@@ -382,6 +532,12 @@
             centerMsg.innerText = "BOSS DEFEATED!";
             centerMsg.style.display = 'block';
             setTimeout(() => centerMsg.style.display = 'none', 2000);
+
+            // Reset camera
+            if (isMobile) {
+                camera.position.z = 35;
+                camera.position.y = 8;
+            }
         }
 
         function checkCollision(obj1, obj2, dist) {
@@ -398,14 +554,21 @@
             if (keys.ArrowLeft) player.x -= player.speed;
             if (keys.ArrowRight) player.x += player.speed;
 
+            // Touch screen direct movement
+            if (isTouchingScreen && !keys.ArrowLeft && !keys.ArrowRight) {
+                const diff = touchTargetX - player.x;
+                if (Math.abs(diff) > 0.5) {
+                    player.x += Math.sign(diff) * player.speed;
+                }
+            }
+
             // Constrain X
             if (player.x < -player.bounds) player.x = -player.bounds;
             if (player.x > player.bounds) player.x = player.bounds;
 
             if (phase === 'rescue') {
-                // Gravity / Jumping
                 if (player.isJumping) {
-                    player.vy -= 0.03; // Gravity
+                    player.vy -= 0.03; 
                     player.y += player.vy;
                     if (player.y <= 0) {
                         player.y = 0;
@@ -414,31 +577,26 @@
                     }
                 }
 
-                // Spawn & Update Unicorns
                 spawnUnicorn();
                 for (let i = unicorns.length - 1; i >= 0; i--) {
                     let u = unicorns[i];
                     u.mesh.position.y -= u.speed;
 
-                    // Rotate for visual effect
                     u.mesh.rotation.x += 0.05;
                     u.mesh.rotation.y += 0.05;
 
-                    // Catch Check (Hitbox ~ 2 units)
                     if (checkCollision(playerMesh, u.mesh, 2.5)) {
                         scene.remove(u.mesh);
                         unicorns.splice(i, 1);
                         score += 20;
                         scoreEl.innerText = score;
 
-                        // Check transition
                         if (score >= targetBossScore) {
                             triggerBoss();
                         }
                         continue;
                     }
 
-                    // Missed
                     if (u.mesh.position.y < -5) {
                         scene.remove(u.mesh);
                         unicorns.splice(i, 1);
@@ -447,20 +605,16 @@
             } 
 
             else if (phase === 'boss') {
-                // Player shooting
                 if (keys.Space) shoot();
 
-                // Update Bullets
                 for (let i = bullets.length - 1; i >= 0; i--) {
                     let b = bullets[i];
                     b.position.y -= 0.6;
 
-                    // Boss Hit Check (Hitbox ~ 2.5 units)
-                    if (checkCollision(b, sharkMesh, 2.5)) {
+                    if (checkCollision(b, sharkMesh, 3.5)) {
                         scene.remove(b);
                         bullets.splice(i, 1);
 
-                        // Flash shark red
                         sharkMesh.material.color.setHex(0xff0000);
                         setTimeout(() => sharkMesh.material.color.setHex(0x607D8B), 100);
 
@@ -477,33 +631,28 @@
                     }
                 }
 
-                // Update Shark Boss
                 if (sharkData.state === 'swimming') {
                     sharkMesh.position.x += sharkData.speed * sharkData.dir;
 
-                    // Face direction of travel
                     sharkMesh.rotation.z = sharkData.dir === 1 ? -Math.PI/2 : Math.PI/2;
 
-                    // Bounce walls
-                    if (sharkMesh.position.x > 18) sharkData.dir = -1;
-                    if (sharkMesh.position.x < -18) sharkData.dir = 1;
+                    // Adjust wall bounce based on screen bounds
+                    const sharkBounds = player.bounds + 3;
+                    if (sharkMesh.position.x > sharkBounds) sharkData.dir = -1;
+                    if (sharkMesh.position.x < -sharkBounds) sharkData.dir = 1;
 
-                    // Random jump attack
                     if (Math.random() < 0.015) {
                         sharkData.state = 'jumping';
-                        sharkData.vy = 0.8; // jump strength
-                        // Rotate to point up
+                        sharkData.vy = 0.8; 
                         sharkMesh.rotation.z = 0; 
                     }
                 } else if (sharkData.state === 'jumping') {
-                    sharkData.vy -= 0.03; // gravity
+                    sharkData.vy -= 0.03; 
                     sharkMesh.position.y += sharkData.vy;
 
-                    // Rotate based on velocity (arc)
                     let targetRot = sharkData.vy > 0 ? 0 : Math.PI;
                     sharkMesh.rotation.z += (targetRot - sharkMesh.rotation.z) * 0.1;
 
-                    // Splash down
                     if (sharkMesh.position.y <= -2 && sharkData.vy < 0) {
                         sharkMesh.position.y = -2;
                         sharkData.state = 'swimming';
@@ -511,23 +660,19 @@
                     }
                 }
 
-                // Eaten Check (Player vs Shark)
-                if (checkCollision(playerMesh, sharkMesh, 3)) {
+                if (checkCollision(playerMesh, sharkMesh, 3.5)) {
                     gameOver = true;
                     playerMesh.material.color.setHex(0xff0000);
                     overlay.style.display = 'flex';
                 }
             }
 
-            // Apply player positions
             playerMesh.position.x = player.x;
             playerMesh.position.y = player.y;
 
-            // Render
             renderer.render(scene, camera);
         }
 
-        // Start game loop
         animate();
 
     </script>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Casual Smiley Shooter</title>
     <style>
         body {
@@ -14,11 +14,15 @@
             flex-direction: column;
             align-items: center;
             color: #ecf0f1;
+            touch-action: none;
+            overflow: hidden;
         }
         h1 {
-            margin: 10px 0;
+            margin: 5px 0;
             color: #f1c40f;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-size: 24px;
+            text-align: center;
         }
         #game-wrapper {
             position: relative;
@@ -27,18 +31,23 @@
             overflow: hidden;
             border: 4px solid #34495e;
             background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 100%);
+            width: 95%;
+            max-width: 600px;
+            aspect-ratio: 6 / 7;
         }
         canvas {
             display: block;
+            width: 100%;
+            height: 100%;
         }
         #ui-layer {
             position: absolute;
             top: 10px;
-            left: 20px;
-            right: 20px;
+            left: 10px;
+            right: 10px;
             display: flex;
             justify-content: space-between;
-            font-size: 24px;
+            font-size: 18px;
             font-weight: bold;
             color: #2c3e50;
             text-shadow: 1px 1px 0px #fff;
@@ -59,13 +68,13 @@
             text-align: center;
         }
         #overlay h2 {
-            font-size: 48px;
+            font-size: 36px;
             margin: 0 0 10px 0;
             color: #f1c40f;
         }
         #overlay p {
-            font-size: 24px;
-            margin: 0 0 30px 0;
+            font-size: 20px;
+            margin: 0 0 20px 0;
         }
         button {
             padding: 12px 30px;
@@ -77,18 +86,83 @@
             cursor: pointer;
             box-shadow: 0 5px 0 #27ae60;
             transition: all 0.1s;
+            touch-action: manipulation;
         }
         button:active {
             box-shadow: 0 2px 0 #27ae60;
             transform: translateY(3px);
         }
-        .controls {
-            margin-top: 15px;
+        .controls-info {
+            margin-top: 10px;
             background: rgba(0,0,0,0.3);
-            padding: 10px 20px;
+            padding: 8px;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 14px;
             text-align: center;
+            width: 90%;
+            max-width: 600px;
+        }
+
+        #mobile-controls {
+            display: flex;
+            width: 95%;
+            max-width: 600px;
+            justify-content: space-between;
+            margin-top: 10px;
+            gap: 10px;
+        }
+
+        .d-pad {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .mobile-btn {
+            flex: 1;
+            padding: 15px 5px;
+            background: rgba(52, 152, 219, 0.8);
+            border: 3px solid #2980b9;
+            color: white;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            user-select: none;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: 0 4px 0 #2980b9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mobile-btn.action {
+            background: rgba(231, 76, 60, 0.8);
+            border-color: #c0392b;
+            box-shadow: 0 4px 0 #c0392b;
+            flex: 1.2;
+        }
+
+        .mobile-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 transparent;
+        }
+
+        @media screen and (min-width: 768px) {
+            h1 { font-size: 32px; margin: 10px 0; }
+            #ui-layer { font-size: 24px; left: 20px; right: 20px; }
+            .controls-info { font-size: 16px; padding: 10px 20px; margin-top: 15px; }
+            #mobile-controls { display: none; }
+            #overlay h2 { font-size: 48px; }
+            #overlay p { font-size: 24px; margin-bottom: 30px;}
+        }
+
+        @media screen and (max-height: 600px) {
+            h1 { display: none; }
+            .controls-info { display: none; }
+            #mobile-controls { margin-top: 5px; }
+            .mobile-btn { padding: 10px 5px; font-size: 20px; }
         }
     </style>
 </head>
@@ -111,9 +185,17 @@
         </div>
     </div>
 
-    <div class="controls">
-        <strong>Controls:</strong> ⬅️ ➡️ Arrow Keys to Move &nbsp;|&nbsp; <strong>Spacebar</strong> to Shoot<br>
-        <em>Relax Mode: Game continues even if smileys fall down!</em>
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="mobile-btn" id="btn-left">⬅️</div>
+            <div class="mobile-btn" id="btn-right">➡️</div>
+        </div>
+        <div class="mobile-btn action" id="btn-shoot">💥 SHOOT</div>
+    </div>
+
+    <div class="controls-info">
+        <strong>Controls:</strong> ⬅️ ➡️ Buttons/Arrow Keys to Move &nbsp;|&nbsp; <strong>Shoot Button/Spacebar</strong> to Shoot<br>
+        <em>Relax Mode: Game continues even if smileys fall down! Tap game area to move/shoot directly.</em>
     </div>
 
     <script>
@@ -155,6 +237,98 @@
             if (e.code === 'ArrowLeft') keys.ArrowLeft = false;
             if (e.code === 'ArrowRight') keys.ArrowRight = false;
             if (e.code === 'Space') canShoot = true;
+        });
+
+        // Touch Controls Mapping
+        function bindTouch(id, code) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const start = (e) => { e.preventDefault(); keys[code] = true; };
+            const end = (e) => { e.preventDefault(); keys[code] = false; };
+            el.addEventListener('touchstart', start, {passive: false});
+            el.addEventListener('mousedown', start);
+            el.addEventListener('touchend', end);
+            el.addEventListener('mouseup', end);
+            el.addEventListener('mouseleave', end);
+        }
+
+        bindTouch('btn-left', 'ArrowLeft');
+        bindTouch('btn-right', 'ArrowRight');
+
+        // Custom shoot button handling to prevent rapid fire machine gunning on hold
+        const btnShoot = document.getElementById('btn-shoot');
+        let touchCanShoot = true;
+
+        const handleShootPress = (e) => {
+            e.preventDefault();
+            if (touchCanShoot && gameState === 'playing') {
+                shoot();
+                touchCanShoot = false;
+            }
+        };
+        const handleShootRelease = (e) => {
+            e.preventDefault();
+            touchCanShoot = true;
+        };
+
+        btnShoot.addEventListener('touchstart', handleShootPress, {passive: false});
+        btnShoot.addEventListener('mousedown', handleShootPress);
+        btnShoot.addEventListener('touchend', handleShootRelease);
+        btnShoot.addEventListener('mouseup', handleShootRelease);
+        btnShoot.addEventListener('mouseleave', handleShootRelease);
+
+        // Direct Canvas Touch Controls (Drag to move, Tap to shoot)
+        let scaleX = 1;
+        let scaleY = 1;
+
+        function updateScale() {
+            const rect = canvas.getBoundingClientRect();
+            scaleX = canvas.width / rect.width;
+            scaleY = canvas.height / rect.height;
+        }
+
+        window.addEventListener('resize', updateScale);
+        setTimeout(updateScale, 100);
+
+        let isDragging = false;
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (gameState !== 'playing') return;
+            e.preventDefault();
+            updateScale();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (touch.clientX - rect.left) * scaleX;
+            const touchY = (touch.clientY - rect.top) * scaleY;
+
+            // If touching near player, start drag
+            if (touchY > canvas.height - 150) {
+                isDragging = true;
+                player.x = touchX - player.width / 2;
+            } else {
+                // Tapping upper screen shoots
+                if (touchCanShoot) {
+                    shoot();
+                    touchCanShoot = false;
+                }
+            }
+        }, {passive: false});
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (gameState !== 'playing' || !isDragging) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (touch.clientX - rect.left) * scaleX;
+
+            player.x = touchX - player.width / 2;
+            if (player.x < 30) player.x = 30;
+            if (player.x > canvas.width - 40) player.x = canvas.width - 40;
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', () => { 
+            isDragging = false; 
+            touchCanShoot = true;
         });
 
         // Player (Girl with gun)
@@ -202,7 +376,6 @@
                 this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
                 this.y = -30;
 
-                // REDUCED SPEED: Base speed lowered significantly for both levels
                 let baseSpeed = level === 1 ? 1 : 2.5; 
                 this.speed = baseSpeed + Math.random() * 1.0;
 
@@ -278,6 +451,8 @@
                 banner.style.fontWeight = 'bold';
                 banner.style.textShadow = '2px 2px #fff';
                 banner.style.zIndex = '5';
+                banner.style.textAlign = 'center';
+                banner.style.width = '100%';
                 document.getElementById('game-wrapper').appendChild(banner);
 
                 setTimeout(() => banner.remove(), 2000);
@@ -300,7 +475,6 @@
                 let s = smileys[i];
                 s.update();
 
-                // MODIFIED: Game no longer ends if a smiley reaches the bottom. It just disappears.
                 if (s.y > canvas.height + 20) {
                     smileys.splice(i, 1);
                     continue; 
@@ -350,7 +524,7 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function resetGame() {
+        window.resetGame = function() {
             score = 0;
             level = 1;
             scoreEl.innerText = score;

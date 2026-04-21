@@ -15,7 +15,7 @@
             align-items: center; 
             padding-top: 5px;
             touch-action: none;
-            overflow-x: hidden;
+            overflow: hidden;
         }
         h1 { margin: 0 0 5px 0; color: #e94560; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); font-size: 20px;}
         #game-container {
@@ -47,11 +47,10 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             border: 1px solid #0f3460;
             box-sizing: border-box;
-            flex-wrap: wrap;
         }
-        .player-ui { display: flex; flex-direction: column; width: 40%; font-size: 14px; min-width: 140px;}
+        .player-ui { display: flex; flex-direction: column; width: 40%; font-size: 14px;}
         .player-ui h2 { margin: 0 0 2px 0; font-size: 16px; }
-        .controls { font-size: 11px; color: #a9a9a9; margin-top: 4px; background: rgba(0,0,0,0.2); padding: 3px; border-radius: 4px; display: none;} /* Hidden on mobile to save space */
+        .controls { font-size: 11px; color: #a9a9a9; margin-top: 4px; background: rgba(0,0,0,0.2); padding: 3px; border-radius: 4px;}
         .turn-indicator { 
             font-size: 18px; 
             font-weight: bold; 
@@ -61,16 +60,7 @@
             align-items: center;
             justify-content: center;
             text-shadow: 1px 1px 2px #000;
-            width: 100%;
-            order: -1; /* Moves turn indicator to top in narrow views */
-            margin-bottom: 5px;
         }
-
-        @media screen and (min-width: 600px) {
-            .turn-indicator { width: auto; order: 0; margin-bottom: 0; }
-            .controls { display: block; }
-        }
-
         .stat { font-weight: bold; color: #fff; }
         .weapon-badge {
             display: inline-block;
@@ -86,13 +76,11 @@
             max-width: 960px;
             justify-content: center;
             margin-top: 8px;
-            gap: 6px;
-            flex-wrap: wrap; /* Allows buttons to wrap on portrait screens */
+            gap: 8px;
         }
         .mobile-btn {
-            flex: 1 1 30%; /* Take up to 30% of width on small screens to make 2 rows of 3 */
-            min-width: 80px;
-            padding: 10px 2px;
+            flex: 1;
+            padding: 8px 2px;
             background: rgba(255,255,255,0.1);
             border: 2px solid #4CAF50;
             color: white;
@@ -105,19 +93,43 @@
             touch-action: manipulation;
         }
         .mobile-btn:active { background: rgba(255,255,255,0.3); }
-        #btn-fire { background: #FF5722; border-color: #FF5722; font-size: 16px; flex: 1 1 100%; padding: 12px 2px;} /* Make fire button full width in portrait */
+        #btn-fire { background: #FF5722; border-color: #FF5722; font-size: 16px; }
 
-        @media screen and (min-width: 600px) {
-            .mobile-btn { flex: 1; padding: 8px 2px; }
-            #btn-fire { flex: 1; }
+        /* Portrait warning */
+        #rotate-message {
+            display: none;
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background:#1a1a2e; z-index: 1000;
+            align-items: center; justify-content: center;
+            flex-direction: column; text-align: center;
         }
-
+        #rotate-icon {
+            font-size: 50px;
+            margin-bottom: 20px;
+            animation: rotateAnim 2s infinite ease-in-out;
+        }
+        @keyframes rotateAnim {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(-90deg); }
+        }
+        @media screen and (orientation: portrait) {
+            #rotate-message { display: flex; }
+            #game-container { display: none; }
+        }
         @media screen and (max-height: 400px) {
             h1 { display: none; }
+            .controls { display: none; }
         }
     </style>
 </head>
 <body>
+    <div id="rotate-message">
+        <div id="rotate-icon">📱</div>
+        <h2>Please Rotate Your Device</h2>
+        <p>This game is best played in landscape mode.</p>
+    </div>
+
     <div id="game-container">
         <h1>Tanks of Chaos</h1>
         <div id="ui">

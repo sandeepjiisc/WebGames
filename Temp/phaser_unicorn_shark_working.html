@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Critical for mobile and iframes -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>PixiJS Unicorn Rescue & Shark Boss</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
@@ -43,9 +44,9 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
             border: 4px solid #9C27B0;
             border-radius: 10px;
-            overflow: hidden;
+            overflow: hidden; /* Canvas stays inside */
             width: 100%;
-            aspect-ratio: 4 / 3; /* Desktop default */
+            aspect-ratio: 4 / 3;
             background-color: #81D4FA;
         }
         canvas {
@@ -55,6 +56,7 @@
             touch-action: none;
         }
 
+        /* DESKTOP CONTROLS */
         .controls {
             margin: 10px;
             background: rgba(255,255,255,0.1);
@@ -66,35 +68,37 @@
             display: block;
         }
 
+        /* MOBILE CONTROLS OVERLAY */
         #mobile-controls {
+            /* Positioned absolute TO THE GAME CONTAINER so it's always visible over the canvas */
             position: absolute;
             bottom: 5%; 
             left: 0;
             width: 100%;
             padding: 0 5%;
             box-sizing: border-box;
-            display: flex;
+            display: flex; /* FORCE VISIBLE BY DEFAULT ON MOBILE */
             justify-content: space-between;
             z-index: 9999;
-            pointer-events: none;
+            pointer-events: none; /* Let touches pass through the empty space */
         }
 
         .d-pad, .action-pad {
             display: flex;
             gap: 15px;
-            pointer-events: auto;
+            pointer-events: auto; /* Re-enable for buttons */
         }
 
         .m-btn {
-            width: 60px;
-            height: 60px;
-            background: rgba(224, 64, 251, 0.6);
-            border: 3px solid rgba(255, 255, 255, 0.8);
+            width: clamp(50px, 15vw, 75px);
+            height: clamp(50px, 15vw, 75px);
+            background: rgba(224, 64, 251, 0.7);
+            border: 3px solid rgba(255, 255, 255, 0.9);
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 24px;
+            font-size: clamp(20px, 6vw, 30px);
             color: white;
             user-select: none;
             -webkit-user-select: none;
@@ -108,117 +112,67 @@
         }
 
         #btn-action {
-            width: 75px;
-            height: 75px;
+            width: clamp(60px, 18vw, 85px);
+            height: clamp(60px, 18vw, 85px);
             font-weight: bold;
-            font-size: 16px;
+            font-size: clamp(14px, 4vw, 20px);
             border-radius: 20px;
         }
 
-        /* ORIENTATION OVERLAY */
-        #orientation-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: #0f172a;
-            z-index: 99999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .rotate-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: rotatePhone 2s infinite ease-in-out;
-        }
-        @keyframes rotatePhone {
-            0% { transform: rotate(0deg); }
-            50% { transform: rotate(-90deg); }
-            100% { transform: rotate(-90deg); }
-        }
-
-        /* --- RESPONSIVE MEDIA QUERIES --- */
-
-        /* DESKTOP */
+        /* HIDE MOBILE CONTROLS ON LARGE DESKTOP SCREENS */
         @media (min-width: 1024px) {
-            #mobile-controls { display: none !important; }
-        }
-
-        /* MOBILE & TABLET (PORTRAIT) - FORCE ROTATION */
-        @media screen and (max-width: 1023px) and (orientation: portrait) {
-            #orientation-overlay { display: flex; }
-            #game-wrapper, h1, .controls { display: none !important; }
-        }
-
-        /* MOBILE & TABLET (LANDSCAPE) - MAXIMIZE GAME SPACE & OCCUPY FULL WIDTH */
-        @media screen and (max-width: 1023px) and (orientation: landscape) {
-            h1 { display: none; }
-            .controls { display: none !important; }
-
-            #game-wrapper {
-                padding: 0;
-                max-width: none;
-                width: 100vw;
-                height: 100vh;
-            }
-
-            #game-container {
-                border: none;
-                border-radius: 0;
-                width: 100vw;
-                height: 100vh;
-                aspect-ratio: auto; /* Remove 4:3 lock so it fills the whole screen natively */
-                max-width: none;
-                max-height: none;
-            }
-
             #mobile-controls {
-                display: flex !important;
-                bottom: 8%; 
-                padding: 0 6%; /* Push buttons slightly inward */
+                display: none !important;
             }
+        }
 
-            .m-btn {
-                width: 14vh;
-                height: 14vh;
-                font-size: 6vh;
-                border-width: 4px;
-            }
-            #btn-action {
-                width: 18vh;
-                height: 18vh;
-                font-size: 4vh;
+        /* HIDE DESKTOP INSTRUCTIONS ON MOBILE */
+        @media (max-width: 1023px) {
+            .controls {
+                display: none !important;
             }
         }
 
         /* GAME OVER OVERLAY */
         #overlay {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: rgba(0, 0, 0, 0.85);
-            display: none; flex-direction: column; justify-content: center; align-items: center;
-            z-index: 10000; color: white;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: white;
         }
-        #overlay h2 { font-size: clamp(30px, 8vw, 48px); color: #FF5252; margin: 0 0 20px 0; }
-        #overlay button { padding: 12px 30px; font-size: clamp(16px, 4vw, 22px); background-color: #E040FB; color: white; border: none; border-radius: 25px; cursor: pointer; }
+        #overlay h2 {
+            font-size: clamp(30px, 8vw, 48px);
+            color: #FF5252;
+            margin: 0 0 20px 0;
+        }
+        #overlay button {
+            padding: 12px 30px;
+            font-size: clamp(16px, 4vw, 22px);
+            background-color: #E040FB;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
-
-    <div id="orientation-overlay">
-        <div class="rotate-icon">📱</div>
-        <h2 style="margin: 0 0 10px 0; color: #E040FB;">Rotate Device</h2>
-        <p style="font-size: 18px; color: #94a3b8;">Please turn your phone horizontally to play.</p>
-    </div>
 
     <h1>🦄 Rescue & Shark Boss</h1>
 
     <div id="game-wrapper">
         <div id="game-container">
+            <!-- PixiJS Canvas injects here -->
+
+            <!-- CONTROLS ARE INSIDE THE CONTAINER SO THEY STAY OVER THE GAME -->
             <div id="mobile-controls">
                 <div class="d-pad">
                     <div class="m-btn" id="btn-left">⬅️</div>
@@ -242,17 +196,9 @@
     </div>
 
     <script>
-        // Reload page automatically when orientation changes to recalculate the screen width
-        window.addEventListener("orientationchange", function() {
-            setTimeout(() => location.reload(), 500);
-        });
-
-        // Dynamic Width Calculation based on Landscape Aspect Ratio
-        const isLandscapeMobile = window.innerWidth <= 1024 && window.innerWidth > window.innerHeight;
+        // --- PIXI SETUP ---
+        const GAME_WIDTH = 800;
         const GAME_HEIGHT = 600;
-        // If in landscape mobile, expand the internal canvas width to match the exact screen aspect ratio.
-        // This makes the game physically wider without stretching the graphics (no fat bunnies).
-        const GAME_WIDTH = isLandscapeMobile ? Math.floor(GAME_HEIGHT * (window.innerWidth / window.innerHeight)) : 800;
         const POND_Y = 480;
 
         const app = new PIXI.Application({
@@ -262,22 +208,28 @@
             antialias: true
         });
 
+        // Insert canvas inside game-container but BEFORE the mobile controls and overlay
         const container = document.getElementById('game-container');
         container.insertBefore(app.view, container.firstChild);
 
+        // --- GAME STATE ---
         let score = 0;
         let phase = 'rescue';
         let targetBossScore = 200;
         let gameOver = false;
+
         let unicorns = [];
         let bullets = [];
         let savedRabbits = [];
+
         let sharkData = { hp: 10, maxHp: 10, speed: 3.5, dir: 1, state: 'swimming', vy: 0 };
         let playerState = { vy: 0, isJumping: false, speed: 5 };
 
+        // --- INPUTS ---
         const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false };
         let lastFired = 0;
 
+        // Desktop Keyboards
         window.addEventListener('keydown', (e) => {
             if(keys.hasOwnProperty(e.code)) keys[e.code] = true;
             if(e.code === 'ArrowUp' && phase === 'rescue' && !playerState.isJumping) {
@@ -289,6 +241,7 @@
             if(keys.hasOwnProperty(e.code)) keys[e.code] = false;
         });
 
+        // Mobile Touch mapping
         const bindTouch = (id, onDown, onUp) => {
             const btn = document.getElementById(id);
             if(!btn) return;
@@ -321,6 +274,7 @@
             }
         }, 500);
 
+        // --- CONTAINERS (Layers) ---
         const bgLayer = new PIXI.Container();
         const mainLayer = new PIXI.Container();
         const waterLayer = new PIXI.Container();
@@ -331,6 +285,7 @@
         app.stage.addChild(waterLayer);
         app.stage.addChild(uiLayer);
 
+        // --- GRAPHICS & TEXTURES ---
         const waterRect = new PIXI.Graphics();
         waterRect.beginFill(0x0288D1, 0.6);
         waterRect.drawRect(0, POND_Y + 20, GAME_WIDTH, GAME_HEIGHT - POND_Y);
@@ -351,6 +306,7 @@
             return text;
         };
 
+        // --- ENTITIES ---
         const player = createEmojiSprite('🐰', 45, GAME_WIDTH/2, POND_Y);
         mainLayer.addChild(player);
 
@@ -358,6 +314,7 @@
         shark.visible = false;
         mainLayer.addChild(shark);
 
+        // --- UI ---
         const scoreText = new PIXI.Text('Score: 0', new PIXI.TextStyle({ fontSize: 28, fill: '#1A237E', fontWeight: 'bold' }));
         scoreText.position.set(20, 15);
         uiLayer.addChild(scoreText);
@@ -374,12 +331,9 @@
         uiLayer.addChild(centerMsg);
 
         const bossHpBg = new PIXI.Graphics();
-        const hpBarWidth = 400;
-        const hpBarX = (GAME_WIDTH / 2) - (hpBarWidth / 2);
-
         bossHpBg.beginFill(0x333333);
         bossHpBg.lineStyle(3, 0xffffff);
-        bossHpBg.drawRect(hpBarX, 50, hpBarWidth, 20);
+        bossHpBg.drawRect(200, 50, 400, 20);
         bossHpBg.endFill();
         bossHpBg.visible = false;
         uiLayer.addChild(bossHpBg);
@@ -391,9 +345,9 @@
         function updateHpBar() {
             bossHpFill.clear();
             if(phase !== 'boss') return;
-            const fillWidth = hpBarWidth * (sharkData.hp / sharkData.maxHp);
+            const fillWidth = 400 * (sharkData.hp / sharkData.maxHp);
             bossHpFill.beginFill(0xF44336);
-            bossHpFill.drawRect(hpBarX, 50, fillWidth, 20);
+            bossHpFill.drawRect(200, 50, fillWidth, 20);
             bossHpFill.endFill();
         }
 
@@ -456,6 +410,7 @@
             setTimeout(() => centerMsg.visible = false, 2000);
         }
 
+        // --- MAIN LOOP ---
         app.ticker.add((delta) => {
             if (gameOver) return;
 
@@ -468,7 +423,6 @@
                 if(phase === 'rescue') player.scale.x = 1;
             }
 
-            // Updated bounds for dynamic screen width
             if (player.x < 30) player.x = 30;
             if (player.x > GAME_WIDTH - 30) player.x = GAME_WIDTH - 30;
 
@@ -485,8 +439,7 @@
                 }
 
                 if (Math.random() < 0.015 * delta) {
-                    // Spawn across the entire dynamic width
-                    const uSprite = createEmojiSprite('🦄', 40, 50 + Math.random() * (GAME_WIDTH - 100), -30, 0.5);
+                    const uSprite = createEmojiSprite('🦄', 40, 50 + Math.random() * 700, -30, 0.5);
                     mainLayer.addChild(uSprite);
                     unicorns.push({ sprite: uSprite, speed: 2 + Math.random() * 2 });
                 }
@@ -573,7 +526,6 @@
                     shark.x += sharkData.speed * sharkData.dir * delta;
                     shark.scale.x = -sharkData.dir;
 
-                    // Shark swims across the entire dynamic width
                     if (shark.x > GAME_WIDTH - 50) sharkData.dir = -1;
                     if (shark.x < 50) sharkData.dir = 1;
 

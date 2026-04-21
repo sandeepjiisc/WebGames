@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phaser: Unicorn Rescue & Shark Attack</title>
+    <!-- Load Phaser 3 Framework -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121220;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        h1 {
+            color: #E040FB;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #game-wrapper {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 4px solid #9C27B0;
+            border-radius: 10px;
+        }
+        canvas {
+            display: block;
+            border-radius: 6px;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #overlay h2 {
+            font-size: 48px;
+            color: #FF5252;
+            margin: 0 0 20px 0;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 22px;
+            background-color: #E040FB;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #9C27B0;
+        }
+        button:active {
+            box-shadow: 0 2px 0 #9C27B0;
+            transform: translateY(3px);
+        }
+        .controls {
+            margin-top: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            line-height: 1.5;
+        }
+    
+        /* MOBILE CONTROLS OVERLAY */
+        #mobile-controls {
+            display: none; /* Hidden by default on desktop */
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            z-index: 100;
+            pointer-events: none; /* Let touches pass through the container */
+        }
+
+        .d-pad {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto; /* Re-enable for buttons */
+        }
+
+        .action-pad {
+            display: flex;
+            align-items: flex-end;
+            pointer-events: auto;
+        }
+
+        .m-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .m-btn:active {
+            background: rgba(255, 255, 255, 0.6);
+            transform: scale(0.95);
+        }
+
+        #btn-action {
+            width: 80px;
+            height: 80px;
+            background: rgba(224, 64, 251, 0.4);
+            border-color: rgba(224, 64, 251, 0.8);
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex; /* Show on mobile devices */
+            }
+            .controls {
+                display: none; /* Hide keyboard instructions on mobile */
+            }
+        }
+    
+    </style>
+</head>
+<body>
+
+    <h1>🦄 Rescue & Shark Boss (Phaser 3) 🦈</h1>
+
+    <div id="game-wrapper">
+        <!-- The Phaser Canvas will be injected here -->
+        <div id="game-container"></div>
+
+        <div id="overlay">
+            <h2>Game Over!</h2>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="m-btn" id="btn-left">⬅️</div>
+            <div class="m-btn" id="btn-right">➡️</div>
+        </div>
+        <div class="action-pad">
+            <div class="m-btn" id="btn-action">JUMP</div>
+        </div>
+    </div>
+    
+        </div>
+
+    <div class="controls">
+        <strong>Rescue Phase:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
+        <strong>Boss Phase:</strong> ⬅️ ➡️ to Move | <strong>Spacebar</strong> to Shoot
+    </div>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 600 },
+                    debug: false
+                }
+            },
+            scene: {
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+        // Global Game Variables
+        let player, shark, ground;
+        let unicornsGroup, bulletsGroup;
+        let cursors, spaceKey;
+
+        let score = 0;
+        let phase = 'rescue'; // 'rescue' or 'boss'
+        let targetBossScore = 200;
+
+        let sharkHp = 10;
+        let sharkMaxHp = 10;
+        let sharkSpeed = 200;
+        let sharkDir = 1;
+        let sharkState = 'swimming'; // 'swimming' or 'jumping'
+
+        let scoreText, phaseText, centerText;
+        let hpBarGraphics;
+        let unicornTimer;
+        let lastFired = 0;
+
+        const POND_Y = 480;
+
+        function create() {
+            // 1. Background & Water
+            this.cameras.main.setBackgroundColor('#81D4FA');
+            // Water overlay (rendered in front of background, but behind characters if sorted)
+            let water = this.add.rectangle(400, 540, 800, 120, 0x0288D1).setAlpha(0.6).setDepth(5);
+
+            // 2. Invisible Ground for Physics
+            ground = this.add.rectangle(400, POND_Y + 15, 800, 20, 0x000000, 0);
+            this.physics.add.existing(ground, true);
+
+            // 3. Player (Rabbit)
+            player = this.add.text(400, POND_Y - 20, '🐰', { fontSize: '45px' }).setOrigin(0.5);
+            this.physics.add.existing(player);
+            player.body.setCollideWorldBounds(true);
+            player.setDepth(10);
+
+            // 4. Boss (Shark)
+            shark = this.add.text(400, 530, '🦈', { fontSize: '70px' }).setOrigin(0.5);
+            this.physics.add.existing(shark);
+            shark.body.setCollideWorldBounds(true);
+            shark.body.setAllowGravity(false); // Floats in water by default
+            shark.setVisible(false).setActive(false);
+            shark.setDepth(6);
+
+            // 5. Physics Groups
+            unicornsGroup = this.physics.add.group();
+            bulletsGroup = this.physics.add.group();
+
+            // 6. Collisions & Overlaps
+            this.physics.add.collider(player, ground);
+            this.physics.add.overlap(player, unicornsGroup, catchUnicorn, null, this);
+            this.physics.add.overlap(bulletsGroup, shark, hitShark, null, this);
+            this.physics.add.overlap(player, shark, playerEaten, null, this);
+
+            // 7. Inputs
+            cursors = this.input.keyboard.createCursorKeys();
+            spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+            // 8. Timers
+            unicornTimer = this.time.addEvent({
+                delay: 900,
+                callback: spawnUnicorn,
+                callbackScope: this,
+                loop: true
+            });
+
+            // 9. UI Elements
+            scoreText = this.add.text(20, 15, 'Score: 0', { fontSize: '28px', fill: '#1A237E', fontStyle: 'bold' }).setDepth(20);
+            phaseText = this.add.text(600, 15, 'Phase: Rescue', { fontSize: '24px', fill: '#1A237E', fontStyle: 'bold' }).setDepth(20);
+
+            centerText = this.add.text(400, 300, '', { fontSize: '50px', fill: '#F44336', fontStyle: 'bold', stroke: '#fff', strokeThickness: 6 }).setOrigin(0.5).setDepth(20);
+            centerText.setVisible(false);
+
+            hpBarGraphics = this.add.graphics().setDepth(20);
+        }
+
+        function spawnUnicorn() {
+            if (phase !== 'rescue') return;
+
+            let x = Phaser.Math.Between(50, 750);
+            let unicorn = this.add.text(x, -30, '🦄', { fontSize: '40px' }).setOrigin(0.5);
+            this.physics.add.existing(unicorn);
+            // Give unicorns varying gravity/fall speeds
+            unicorn.body.setGravityY(Phaser.Math.Between(-400, -200)); 
+            unicornsGroup.add(unicorn);
+        }
+
+        function update(time, delta) {
+            if (phase === 'gameover') return;
+
+            // --- Player Movement ---
+            if (cursors.left.isDown) {
+                player.body.setVelocityX(-300);
+                if (phase === 'rescue') player.scaleX = -1; // Flip rabbit
+            } else if (cursors.right.isDown) {
+                player.body.setVelocityX(300);
+                if (phase === 'rescue') player.scaleX = 1;
+            } else {
+                player.body.setVelocityX(0);
+            }
+
+            // --- Phase Specific Logic ---
+            if (phase === 'rescue') {
+                // Jump logic
+                if (cursors.up.isDown && player.body.touching.down) {
+                    player.body.setVelocityY(-480);
+                }
+
+                // Check Boss Transition
+                if (score >= targetBossScore) {
+                    transitionToBoss();
+                }
+
+            } else if (phase === 'boss') {
+                // Keep player floating at the top
+                player.y = 80;
+
+                // Shooting Logic
+                if (spaceKey.isDown && time > lastFired + 250) {
+                    shootBullet();
+                    lastFired = time;
+                }
+
+                // Shark Logic
+                if (shark.active) {
+                    if (sharkState === 'swimming') {
+                        shark.body.setVelocityX(sharkSpeed * sharkDir);
+
+                        // Flip Shark sprite based on direction
+                        shark.scaleX = -sharkDir;
+
+                        // Bounce off walls
+                        if (shark.x <= 50) sharkDir = 1;
+                        if (shark.x >= 750) sharkDir = -1;
+
+                        // Randomly Jump Attack
+                        if (Phaser.Math.FloatBetween(0, 1) < 0.015) {
+                            sharkState = 'jumping';
+                            shark.body.setAllowGravity(true);
+                            shark.body.setVelocityY(Phaser.Math.Between(-600, -450));
+                        }
+                    } else if (sharkState === 'jumping') {
+                        // Return to swimming when falling back to water
+                        if (shark.y >= 530 && shark.body.velocity.y > 0) {
+                            shark.y = 530;
+                            shark.body.setVelocityY(0);
+                            shark.body.setAllowGravity(false);
+                            sharkState = 'swimming';
+
+                            // Randomize direction after landing
+                            sharkDir = Phaser.Math.Between(0, 1) === 0 ? 1 : -1;
+                        }
+                    }
+                }
+            }
+
+            // Cleanup objects that fall off screen
+            unicornsGroup.getChildren().forEach(u => {
+                if (u.y > 650) u.destroy();
+            });
+            bulletsGroup.getChildren().forEach(b => {
+                if (b.y > 650) b.destroy();
+            });
+        }
+
+        // --- Interactions ---
+
+        function catchUnicorn(playerBody, unicorn) {
+            unicorn.destroy();
+            score += 20;
+            scoreText.setText('Score: ' + score);
+
+            // Pop Animation
+            let popText = this.add.text(unicorn.x, unicorn.y, '+20', { fontSize: '24px', fill: '#9C27B0', fontStyle: 'bold' });
+            this.tweens.add({
+                targets: popText,
+                y: popText.y - 50,
+                alpha: 0,
+                duration: 800,
+                onComplete: () => popText.destroy()
+            });
+        }
+
+        function shootBullet() {
+            // Align bullet with the gun emoji
+            let bullet = this.add.circle(player.x + 20, player.y + 20, 8, 0xFFEB3B);
+            this.physics.add.existing(bullet);
+            bullet.body.setAllowGravity(false);
+            bullet.body.setVelocityY(500);
+            bulletsGroup.add(bullet);
+        }
+
+        function hitShark(sharkBody, bullet) {
+            bullet.destroy();
+            sharkHp--;
+            drawHpBar();
+
+            // Flash Shark Red
+            shark.setTint(0xff0000);
+            this.time.delayedCall(100, () => shark.clearTint());
+
+            if (sharkHp <= 0) {
+                defeatBoss();
+            }
+        }
+
+        function playerEaten(playerBody, sharkBody) {
+            phase = 'gameover';
+            this.physics.pause();
+            player.setTint(0xff0000);
+            document.getElementById('overlay').style.display = 'flex';
+        }
+
+        // --- Transitions ---
+
+        function transitionToBoss() {
+            phase = 'boss';
+            phaseText.setText('Phase: BOSS FIGHT!');
+            phaseText.setFill('#F44336');
+
+            // Setup Player for flying
+            player.body.setAllowGravity(false);
+            player.body.setVelocityY(0);
+            player.setText('🦄🐰🔫');
+            player.scaleX = 1; // reset flip
+
+            // Clear remaining unicorns
+            unicornsGroup.clear(true, true);
+
+            // Setup Boss
+            sharkHp = 10 + ((targetBossScore / 200) * 5); // Scale difficulty
+            sharkMaxHp = sharkHp;
+            sharkSpeed = 150 + ((targetBossScore / 200) * 50);
+            shark.setActive(true).setVisible(true);
+            shark.x = 400;
+            shark.y = 530;
+            sharkState = 'swimming';
+
+            drawHpBar();
+
+            // Announce
+            centerText.setText('SHARK ATTACK!');
+            centerText.setVisible(true);
+            game.scene.scenes[0].time.delayedCall(2000, () => centerText.setVisible(false));
+        }
+
+        function defeatBoss() {
+            score += 50;
+            targetBossScore += 200;
+            scoreText.setText('Score: ' + score);
+
+            phase = 'rescue';
+            phaseText.setText('Phase: Rescue');
+            phaseText.setFill('#1A237E');
+
+            // Setup Player back to pond
+            player.body.setAllowGravity(true);
+            player.setText('🐰');
+
+            // Hide Boss
+            shark.setActive(false).setVisible(false);
+            bulletsGroup.clear(true, true);
+            hpBarGraphics.clear();
+
+            // Announce
+            centerText.setText('BOSS DEFEATED!');
+            centerText.setVisible(true);
+            game.scene.scenes[0].time.delayedCall(2000, () => centerText.setVisible(false));
+        }
+
+        function drawHpBar() {
+            hpBarGraphics.clear();
+            if (phase !== 'boss') return;
+
+            const barWidth = 400;
+            const barHeight = 20;
+            const x = 200;
+            const y = 50;
+
+            // Background
+            hpBarGraphics.fillStyle(0x333333);
+            hpBarGraphics.fillRect(x, y, barWidth, barHeight);
+
+            // Health Fill
+            let fillWidth = barWidth * (sharkHp / sharkMaxHp);
+            hpBarGraphics.fillStyle(0xF44336);
+            hpBarGraphics.fillRect(x, y, fillWidth, barHeight);
+
+            // Border
+            hpBarGraphics.lineStyle(3, 0xffffff);
+            hpBarGraphics.strokeRect(x, y, barWidth, barHeight);
+        }
+    
+
+        // Mobile Touch Mapping for Phaser
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnAction = document.getElementById('btn-action');
+
+        // We override the Phaser cursors.isDown properties directly when touched
+        const bindBtn = (btn, keyProp) => {
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); cursors[keyProp].isDown = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); cursors[keyProp].isDown = false; });
+        };
+
+        bindBtn(btnLeft, 'left');
+        bindBtn(btnRight, 'right');
+
+        // Action handles both UP (Jump) and SPACE (Shoot)
+        btnAction.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            cursors.up.isDown = true; 
+            spaceKey.isDown = true;
+        });
+        btnAction.addEventListener('touchend', (e) => { 
+            e.preventDefault(); 
+            cursors.up.isDown = false; 
+            spaceKey.isDown = false;
+        });
+
+        // Update Action text based on phase
+        setInterval(() => {
+            if(typeof phase !== 'undefined') {
+                btnAction.innerText = phase === 'boss' ? 'FIRE' : 'JUMP';
+            }
+        }, 500);
+        
+    </script>
+</body>
+</html>

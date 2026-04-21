@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Colorful Tank Wars</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a2e;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
+        h1 {
+            margin: 10px 0 5px 0;
+            color: #4ade80;
+            text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+            font-size: clamp(20px, 4vw, 32px);
+            z-index: 10;
+        }
+
+        #ui-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            padding: 0 20px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 8px;
+            min-width: 120px;
+        }
+
+        .hp-bar-bg {
+            width: 100%;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .hp-bar-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        #turn-indicator {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fcd34d;
+            align-self: center;
+        }
+
+        #game-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            flex-grow: 1;
+            padding: 0 10px 10px 10px;
+            box-sizing: border-box;
+        }
+
+        #gameCanvas {
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 3px solid #334155;
+            border-radius: 8px;
+            background: linear-gradient(to bottom, #0ea5e9, #38bdf8);
+            width: 100%;
+            aspect-ratio: 4 / 3;
+        }
+
+        .controls-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #94a3b8;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            z-index: 200;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #4ade80;
+            color: #000;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #166534;
+        }
+
+        button:active {
+            box-shadow: 0 0 0 #166534;
+            transform: translateY(4px);
+        }
+
+        /* --- MOBILE TOUCH CONTROLS --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 2%; 
+            left: 0;
+            width: 100%;
+            padding: 0 4%;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .d-pad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            pointer-events: auto;
+        }
+
+        .d-pad-row {
+            display: flex;
+            gap: 5px;
+        }
+
+        .action-pad {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+        }
+
+        .m-btn {
+            width: clamp(45px, 12vw, 65px);
+            height: clamp(45px, 12vw, 65px);
+            background: rgba(255, 255, 255, 0.4);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(20px, 5vw, 30px);
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .m-btn:active {
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(0.9);
+        }
+
+        #btn-shoot {
+            width: clamp(65px, 18vw, 90px);
+            height: clamp(65px, 18vw, 90px);
+            font-weight: bold;
+            font-size: clamp(14px, 4vw, 20px);
+            border-radius: 50%;
+            background: rgba(244, 67, 54, 0.7);
+            border-color: rgba(255, 205, 210, 0.9);
+        }
+
+        #btn-shoot:active {
+            background: rgba(244, 67, 54, 1);
+        }
+
+        /* ORIENTATION OVERLAY */
+        #orientation-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #0f172a;
+            z-index: 99999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .rotate-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: rotatePhone 2s infinite ease-in-out;
+        }
+        @keyframes rotatePhone {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(-90deg); }
+        }
+
+        /* RESPONSIVE LAYOUT */
+        @media (min-width: 1024px) {
+            #mobile-controls { display: none !important; }
+        }
+
+        @media screen and (max-width: 1023px) and (orientation: portrait) {
+            #orientation-overlay { display: flex; }
+            h1, #ui-bar, #game-wrapper, .controls-info, #mobile-controls { display: none !important; }
+        }
+
+        @media screen and (max-width: 1023px) and (orientation: landscape) {
+            h1 { display: none; }
+            .controls-info { display: none !important; }
+
+            #ui-bar {
+                max-width: none;
+                padding: 5px 20px;
+                margin-bottom: 5px;
+            }
+
+            #game-wrapper {
+                padding: 0;
+                max-width: none;
+                width: 100vw;
+                height: 100vh;
+            }
+
+            #gameCanvas {
+                border: none;
+                border-radius: 0;
+                width: 100vw;
+                height: calc(100vh - 60px); /* Leave room for UI bar */
+                aspect-ratio: auto;
+            }
+
+            #mobile-controls {
+                display: flex !important;
+                bottom: 5%; 
+                padding: 0 6%;
+            }
+
+            .m-btn {
+                width: 12vh;
+                height: 12vh;
+                font-size: 5vh;
+                border-radius: 20%;
+            }
+
+            #btn-shoot {
+                width: 18vh;
+                height: 18vh;
+                font-size: 4vh;
+                border-radius: 50%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="orientation-overlay">
+        <div class="rotate-icon">📱</div>
+        <h2 style="margin: 0 0 10px 0; color: #E040FB;">Rotate Device</h2>
+        <p style="font-size: 18px; color: #94a3b8;">Please turn your phone horizontally to play.</p>
+    </div>
+
+    <h1>Colorful Tank Wars</h1>
+
+    <div id="ui-bar">
+        <div class="player-info" style="color: #60a5fa;">
+            <strong>Player 1 (Blue)</strong>
+            <div class="hp-bar-bg"><div id="p1-hp" class="hp-bar-fill" style="width: 100%; background: #3b82f6;"></div></div>
+        </div>
+
+        <div id="turn-indicator">P1 Turn!</div>
+
+        <div class="player-info" style="color: #f87171;">
+            <strong>Player 2 (Red)</strong>
+            <div class="hp-bar-bg"><div id="p2-hp" class="hp-bar-fill" style="width: 100%; background: #ef4444;"></div></div>
+        </div>
+    </div>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="mobile-controls">
+            <!-- D-Pad -->
+            <div class="d-pad-container" id="p1-controls">
+                <div class="m-btn" id="btn-w">⬆️</div>
+                <div class="d-pad-row">
+                    <div class="m-btn" id="btn-a">⬅️</div>
+                    <div class="m-btn" id="btn-s">⬇️</div>
+                    <div class="m-btn" id="btn-d">➡️</div>
+                </div>
+            </div>
+
+            <!-- Action Pad -->
+            <div class="action-pad">
+                <div class="m-btn" id="btn-shoot">FIRE</div>
+            </div>
+        </div>
+
+        <div id="game-over">
+            <h2 id="winner-text" style="font-size: 48px; margin: 0;">Player Wins!</h2>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="controls-info">
+        <strong>P1 (Blue):</strong> A/D to Move | W/S to Aim | Space to Shoot &nbsp; | &nbsp; 
+        <strong>P2 (Red):</strong> Left/Right to Move | Up/Down to Aim | Enter to Shoot
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const turnInd = document.getElementById('turn-indicator');
+        const p1HpBar = document.getElementById('p1-hp');
+        const p2HpBar = document.getElementById('p2-hp');
+
+        // Dynamic Sizing for Landscape Mobile
+        const isLandscapeMobile = window.innerWidth <= 1024 && window.innerWidth > window.innerHeight;
+        if (isLandscapeMobile) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight - 60; // account for UI bar
+        }
+
+        const CW = canvas.width;
+        const CH = canvas.height;
+
+        // Terrain Generation (Perlin-noise style smoothing)
+        let terrain = [];
+        function generateTerrain() {
+            terrain = [];
+            let height = CH / 2 + Math.random() * 50;
+            let slope = (Math.random() - 0.5) * 2;
+
+            for (let x = 0; x < CW; x++) {
+                height += slope;
+                slope += (Math.random() - 0.5) * 0.5;
+                slope *= 0.95; // Dampen
+
+                if (height > CH - 50) { height = CH - 50; slope *= -1; }
+                if (height < 200) { height = 200; slope *= -1; }
+
+                terrain.push(height);
+            }
+        }
+        generateTerrain();
+
+        // Game State
+        let turn = 1; // 1 = P1, 2 = P2
+        let state = 'aiming'; // aiming, firing, exploding
+        const keys = {};
+
+        // Tanks
+        const p1 = {
+            x: CW * 0.15,
+            color: '#3b82f6', // Blue
+            barrelAngle: -Math.PI / 4,
+            power: 15,
+            hp: 100,
+            width: 30,
+            height: 15
+        };
+
+        const p2 = {
+            x: CW * 0.85,
+            color: '#ef4444', // Red
+            barrelAngle: -Math.PI * 0.75,
+            power: 15,
+            hp: 100,
+            width: 30,
+            height: 15
+        };
+
+        let projectile = null;
+        let explosions = [];
+
+        // Input Listeners
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        // Map mobile buttons exactly to the e.code strings the engine expects
+        const bindTouch = (id, keyCodeStr, fireBtn = false) => {
+            const btn = document.getElementById(id);
+            if(!btn) return;
+            btn.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                keys[keyCodeStr] = true; 
+
+                // If it's the fire button, trigger the shot manually
+                if (fireBtn && state === 'aiming') {
+                    let currentPlayer = turn === 1 ? p1 : p2;
+                    fire(currentPlayer);
+                }
+            }, {passive: false});
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyCodeStr] = false; }, {passive: false});
+            btn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys[keyCodeStr] = false; }, {passive: false});
+        };
+
+        // Player 1 controls (Blue Tank)
+        bindTouch('btn-w', 'KeyW');
+        bindTouch('btn-s', 'KeyS');
+        bindTouch('btn-a', 'KeyA');
+        bindTouch('btn-d', 'KeyD');
+        // On mobile, the FIRE button acts as both Space (P1) and Enter (P2)
+        bindTouch('btn-shoot', 'Space', true); 
+
+        window.addEventListener('keydown', e => {
+            if (state !== 'aiming') return;
+            let currentPlayer = turn === 1 ? p1 : p2;
+            if ((turn === 1 && e.code === 'Space') || (turn === 2 && e.code === 'Enter')) {
+                fire(currentPlayer);
+            }
+        });
+
+        // Auto-reload on orientation change to fix canvas stretching
+        window.addEventListener("orientationchange", function() {
+            setTimeout(() => location.reload(), 500);
+        });
+
+        function getTerrainY(x) {
+            let ix = Math.floor(x);
+            if (ix < 0) ix = 0;
+            if (ix >= CW) ix = CW - 1;
+            return terrain[ix];
+        }
+
+        function fire(tank) {
+            state = 'firing';
+            let barrelLen = 25;
+            let startX = tank.x + Math.cos(tank.barrelAngle) * barrelLen;
+            let startY = getTerrainY(tank.x) - tank.height + Math.sin(tank.barrelAngle) * barrelLen;
+
+            projectile = {
+                x: startX,
+                y: startY,
+                vx: Math.cos(tank.barrelAngle) * tank.power,
+                vy: Math.sin(tank.barrelAngle) * tank.power,
+                radius: 4,
+                color: '#fbbf24'
+            };
+        }
+
+        function createExplosion(x, y) {
+            for(let i=0; i<30; i++) {
+                explosions.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1.0,
+                    color: Math.random() > 0.5 ? '#f97316' : '#ef4444' // Orange/Red
+                });
+            }
+
+            // Crater terrain
+            let craterRadius = 40;
+            for(let i = -craterRadius; i <= craterRadius; i++) {
+                let tx = Math.floor(x + i);
+                if(tx >= 0 && tx < CW) {
+                    let depth = Math.sqrt(craterRadius*craterRadius - i*i);
+                    terrain[tx] += depth * 0.8;
+                }
+            }
+        }
+
+        function update() {
+            if (state === 'aiming') {
+                let current = turn === 1 ? p1 : p2;
+
+                // P1 Aiming / Movement
+                if (turn === 1 || isLandscapeMobile) { 
+                    // On mobile, the D-pad controls whatever tank is active
+                    if (keys['KeyW']) current.barrelAngle -= 0.03;
+                    if (keys['KeyS']) current.barrelAngle += 0.03;
+                    if (keys['KeyA']) current.x -= 2;
+                    if (keys['KeyD']) current.x += 2;
+                }
+
+                // P2 Aiming / Movement (Desktop)
+                if (turn === 2 && !isLandscapeMobile) {
+                    if (keys['ArrowUp']) current.barrelAngle -= 0.03;
+                    if (keys['ArrowDown']) current.barrelAngle += 0.03;
+                    if (keys['ArrowLeft']) current.x -= 2;
+                    if (keys['ArrowRight']) current.x += 2;
+                }
+
+                // Constraints
+                if (current.x < 10) current.x = 10;
+                if (current.x > CW - 10) current.x = CW - 10;
+
+                // Barrel constraints so they don't shoot into ground
+                if (current.barrelAngle < -Math.PI) current.barrelAngle = -Math.PI;
+                if (current.barrelAngle > 0) current.barrelAngle = 0;
+
+            } else if (state === 'firing') {
+                // Physics
+                projectile.x += projectile.vx;
+                projectile.y += projectile.vy;
+                projectile.vy += 0.4; // Gravity
+
+                let hit = false;
+                let groundY = getTerrainY(projectile.x);
+
+                // Hit ground
+                if (projectile.y >= groundY || projectile.x < 0 || projectile.x > CW) {
+                    hit = true;
+                }
+
+                // Check Tank Hits
+                const checkTankHit = (tank) => {
+                    let ty = getTerrainY(tank.x) - tank.height;
+                    let dx = projectile.x - tank.x;
+                    let dy = projectile.y - ty;
+                    if (Math.sqrt(dx*dx + dy*dy) < 25) {
+                        tank.hp -= 35;
+                        if(tank.hp < 0) tank.hp = 0;
+                        hit = true;
+                    }
+                };
+
+                checkTankHit(p1);
+                checkTankHit(p2);
+
+                if (hit) {
+                    createExplosion(projectile.x, projectile.y);
+                    projectile = null;
+                    state = 'exploding';
+
+                    // Update UI
+                    p1HpBar.style.width = p1.hp + '%';
+                    p2HpBar.style.width = p2.hp + '%';
+
+                    setTimeout(() => {
+                        if (p1.hp <= 0 || p2.hp <= 0) {
+                            document.getElementById('game-over').style.display = 'flex';
+                            let winner = p1.hp > 0 ? "Player 1 (Blue)" : "Player 2 (Red)";
+                            let winColor = p1.hp > 0 ? "#60a5fa" : "#f87171";
+                            document.getElementById('winner-text').innerText = winner + " Wins!";
+                            document.getElementById('winner-text').style.color = winColor;
+                        } else {
+                            state = 'aiming';
+                            turn = turn === 1 ? 2 : 1; // Switch turns
+                            turnInd.innerText = turn === 1 ? "P1 Turn!" : "P2 Turn!";
+                            turnInd.style.color = turn === 1 ? "#60a5fa" : "#f87171";
+
+                            // On mobile, swap the D-pad colors to match the active tank
+                            if(isLandscapeMobile) {
+                                const mBtns = document.querySelectorAll('.d-pad-container .m-btn');
+                                mBtns.forEach(btn => {
+                                    btn.style.background = turn === 1 ? 'rgba(59, 130, 246, 0.6)' : 'rgba(239, 68, 68, 0.6)';
+                                });
+                            }
+                        }
+                    }, 1000);
+                }
+            }
+
+            // Update explosions
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                let e = explosions[i];
+                e.x += e.vx;
+                e.y += e.vy;
+                e.life -= 0.05;
+                if (e.life <= 0) explosions.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            // Sky
+            ctx.clearRect(0, 0, CW, CH);
+
+            // Terrain
+            ctx.fillStyle = '#22c55e'; // Green grass
+            ctx.beginPath();
+            ctx.moveTo(0, CH);
+            for (let x = 0; x < CW; x++) {
+                ctx.lineTo(x, terrain[x]);
+            }
+            ctx.lineTo(CW, CH);
+            ctx.fill();
+
+            // Dirt underneath
+            ctx.fillStyle = '#78350f';
+            ctx.beginPath();
+            ctx.moveTo(0, CH);
+            for (let x = 0; x < CW; x++) {
+                ctx.lineTo(x, terrain[x] + 15);
+            }
+            ctx.lineTo(CW, CH);
+            ctx.fill();
+
+            // Draw Tanks
+            const drawTank = (tank, isTurn) => {
+                if (tank.hp <= 0) return;
+
+                let y = getTerrainY(tank.x);
+
+                // Selection Halo
+                if (isTurn && state === 'aiming') {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(tank.x, y - tank.height, 35, 0, Math.PI*2);
+                    ctx.stroke();
+                }
+
+                // Barrel
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(tank.x, y - tank.height);
+                ctx.lineTo(tank.x + Math.cos(tank.barrelAngle) * 25, y - tank.height + Math.sin(tank.barrelAngle) * 25);
+                ctx.stroke();
+
+                // Body
+                ctx.fillStyle = tank.color;
+                ctx.beginPath();
+                ctx.arc(tank.x, y - tank.height, 12, Math.PI, 0); // Dome turret
+                ctx.fill();
+
+                ctx.fillRect(tank.x - tank.width/2, y - tank.height, tank.width, tank.height); // Chassis
+
+                // Treads
+                ctx.fillStyle = '#333';
+                ctx.fillRect(tank.x - tank.width/2 - 2, y - 4, tank.width + 4, 8);
+            };
+
+            drawTank(p1, turn === 1);
+            drawTank(p2, turn === 2);
+
+            // Draw Projectile
+            if (projectile) {
+                ctx.fillStyle = projectile.color;
+                ctx.beginPath();
+                ctx.arc(projectile.x, projectile.y, projectile.radius, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Draw Explosions
+            explosions.forEach(e => {
+                ctx.globalAlpha = e.life;
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, 4 + Math.random()*4, 0, Math.PI*2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Setup Initial Mobile Button Colors
+        if(isLandscapeMobile) {
+            const mBtns = document.querySelectorAll('.d-pad-container .m-btn');
+            mBtns.forEach(btn => { btn.style.background = 'rgba(59, 130, 246, 0.6)'; }); // Blue for P1
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Colorful 2-Player Tank Wars - Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Colorful 2-Player Tank Wars</title>
     <style>
         body { 
             margin: 0; 
@@ -13,47 +13,30 @@
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            padding-top: 5px;
-            touch-action: none;
-            overflow-x: hidden;
+            padding-top: 20px;
         }
-        h1 { margin: 0 0 5px 0; color: #e94560; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); font-size: 20px;}
-        #game-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            max-width: 1000px;
-        }
+        h1 { margin: 0 0 10px 0; color: #e94560; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
         canvas { 
             background: linear-gradient(to bottom, #0f3460, #87CEEB, #E0F6FF); 
-            border: 2px solid #fff; 
+            border: 4px solid #fff; 
             border-radius: 8px; 
-            box-shadow: 0 0 10px rgba(0,0,0,0.8); 
-            margin-top: 5px; 
-            width: 98%;
-            max-width: 1000px;
-            aspect-ratio: 1000 / 550;
-            height: auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8); 
+            margin-top: 10px; 
         }
         #ui { 
-            width: 98%; 
-            max-width: 960px;
+            width: 960px; 
             display: flex; 
             justify-content: space-between; 
-            padding: 5px 10px; 
+            padding: 15px 20px; 
             background: rgba(22, 33, 62, 0.9); 
             border-radius: 8px; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             border: 1px solid #0f3460;
-            box-sizing: border-box;
-            flex-wrap: wrap;
         }
-        .player-ui { display: flex; flex-direction: column; width: 40%; font-size: 14px; min-width: 140px;}
-        .player-ui h2 { margin: 0 0 2px 0; font-size: 16px; }
-        .controls { font-size: 11px; color: #a9a9a9; margin-top: 4px; background: rgba(0,0,0,0.2); padding: 3px; border-radius: 4px; display: none;} /* Hidden on mobile to save space */
+        .player-ui { display: flex; flex-direction: column; width: 40%; }
+        .controls { font-size: 13px; color: #a9a9a9; margin-top: 8px; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 4px;}
         .turn-indicator { 
-            font-size: 18px; 
+            font-size: 24px; 
             font-weight: bold; 
             text-align: center; 
             color: #FFD700; 
@@ -61,92 +44,196 @@
             align-items: center;
             justify-content: center;
             text-shadow: 1px 1px 2px #000;
-            width: 100%;
-            order: -1; /* Moves turn indicator to top in narrow views */
-            margin-bottom: 5px;
         }
-
-        @media screen and (min-width: 600px) {
-            .turn-indicator { width: auto; order: 0; margin-bottom: 0; }
-            .controls { display: block; }
-        }
-
         .stat { font-weight: bold; color: #fff; }
         .weapon-badge {
             display: inline-block;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 14px;
             font-weight: bold;
             color: #000;
         }
+    
+        body {
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
+        /* Responsive resizing for game canvas */
+        #gameCanvas {
+            max-width: 100vw;
+            max-height: 100vh;
+            object-fit: contain;
+        }
+
+        /* MOBILE CONTROLS OVERLAY */
         #mobile-controls {
+            position: absolute;
+            bottom: 5%;
+            left: 0;
+            width: 100%;
+            padding: 0 2%;
+            box-sizing: border-box;
             display: flex;
-            width: 98%;
-            max-width: 960px;
+            justify-content: space-between;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .d-pad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            pointer-events: auto;
+        }
+
+        .d-pad-row {
+            display: flex;
+            gap: 5px;
+        }
+
+        .m-btn {
+            width: clamp(40px, 12vw, 60px);
+            height: clamp(40px, 12vw, 60px);
+            background: rgba(224, 64, 251, 0.7);
+            border: 3px solid rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
             justify-content: center;
-            margin-top: 8px;
-            gap: 6px;
-            flex-wrap: wrap; /* Allows buttons to wrap on portrait screens */
-        }
-        .mobile-btn {
-            flex: 1 1 30%; /* Take up to 30% of width on small screens to make 2 rows of 3 */
-            min-width: 80px;
-            padding: 10px 2px;
-            background: rgba(255,255,255,0.1);
-            border: 2px solid #4CAF50;
+            align-items: center;
+            font-size: clamp(16px, 5vw, 24px);
             color: white;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            text-align: center;
             user-select: none;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .mobile-btn:active { background: rgba(255,255,255,0.3); }
-        #btn-fire { background: #FF5722; border-color: #FF5722; font-size: 16px; flex: 1 1 100%; padding: 12px 2px;} /* Make fire button full width in portrait */
-
-        @media screen and (min-width: 600px) {
-            .mobile-btn { flex: 1; padding: 8px 2px; }
-            #btn-fire { flex: 1; }
+            -webkit-user-select: none;
+            touch-action: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
-        @media screen and (max-height: 400px) {
+        .m-btn:active {
+            background: rgba(224, 64, 251, 1);
+            transform: scale(0.9);
+        }
+
+        .action-pad {
+            display: flex;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        #btn-shoot {
+            width: clamp(60px, 18vw, 85px);
+            height: clamp(60px, 18vw, 85px);
+            font-weight: bold;
+            font-size: clamp(14px, 4vw, 20px);
+            border-radius: 20px;
+            background: rgba(244, 67, 54, 0.7);
+            border-color: rgba(255, 205, 210, 0.9);
+        }
+
+        #btn-shoot:active {
+            background: rgba(244, 67, 54, 1);
+        }
+
+        /* ORIENTATION OVERLAY */
+        #orientation-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #0f172a;
+            z-index: 99999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .rotate-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: rotatePhone 2s infinite ease-in-out;
+        }
+        @keyframes rotatePhone {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(-90deg); }
+        }
+
+        /* DESKTOP */
+        @media (min-width: 1024px) {
+            #mobile-controls { display: none !important; }
+        }
+
+        /* MOBILE & TABLET (PORTRAIT) */
+        @media screen and (max-width: 1023px) and (orientation: portrait) {
+            #orientation-overlay { display: flex; }
+            h1, .controls, #gameCanvas, #mobile-controls { display: none !important; }
+        }
+
+        /* MOBILE & TABLET (LANDSCAPE) */
+        @media screen and (max-width: 1023px) and (orientation: landscape) {
             h1 { display: none; }
+            .controls { display: none !important; }
+
+            body { justify-content: center; }
+
+            #gameCanvas {
+                width: 100vw;
+                height: 100vh;
+                object-fit: fill; /* Force stretch on mobile for full width */
+            }
+
+            #mobile-controls { display: flex !important; }
         }
+
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <h1>Tanks of Chaos</h1>
-        <div id="ui">
-            <div class="player-ui" id="p1-ui">
-                <h2 style="color: #FF5722;">Player 1 (Left)</h2>
-                <div>HP: <span id="p1-hp" class="stat">100</span> | Pwr: <span id="p1-power" class="stat">50</span> | Ang: <span id="p1-angle" class="stat">45</span>&deg;</div>
-                <div style="margin-top: 3px;">Wpn: <span id="p1-weapon" class="weapon-badge" style="background: #4CAF50;">Standard</span></div>
-                <div class="controls"><b>W/S:</b> Angle | <b>A/D:</b> Power | <b>1-4:</b> Wpn | <b>Space:</b> Fire</div>
-            </div>
-            <div class="turn-indicator" id="turn-display">Player 1's Turn</div>
-            <div class="player-ui" style="text-align: right;" id="p2-ui">
-                <h2 style="color: #2196F3;">Player 2 (Right)</h2>
-                <div>HP: <span id="p2-hp" class="stat">100</span> | Pwr: <span id="p2-power" class="stat">50</span> | Ang: <span id="p2-angle" class="stat">135</span>&deg;</div>
-                <div style="margin-top: 3px;">Wpn: <span id="p2-weapon" class="weapon-badge" style="background: #4CAF50;">Standard</span></div>
-                <div class="controls"><b>&uarr;/&darr;:</b> Angle | <b>&larr;/&rarr;:</b> Power | <b>1-4:</b> Wpn | <b>Enter:</b> Fire</div>
+    <!-- PORTRAIT BLOCKER OVERLAY -->
+    <div id="orientation-overlay">
+        <div class="rotate-icon">📱</div>
+        <h2 style="margin: 0 0 10px 0; color: #E040FB;">Rotate Device</h2>
+        <p style="font-size: 18px; color: #94a3b8;">Please turn your phone horizontally to play.</p>
+    </div>
+
+    <!-- MOBILE CONTROLS -->
+    <div id="mobile-controls">
+        <!-- Player 1 D-Pad (Left side) -->
+        <div class="d-pad-container" id="p1-controls">
+            <div class="m-btn" id="btn-w">⬆️</div>
+            <div class="d-pad-row">
+                <div class="m-btn" id="btn-a">⬅️</div>
+                <div class="m-btn" id="btn-s">⬇️</div>
+                <div class="m-btn" id="btn-d">➡️</div>
             </div>
         </div>
 
-        <canvas id="gameCanvas" width="1000" height="550"></canvas>
-
-        <div id="mobile-controls">
-            <div class="mobile-btn" id="btn-ang-up">Angle &uarr;</div>
-            <div class="mobile-btn" id="btn-ang-down">Angle &darr;</div>
-            <div class="mobile-btn" id="btn-pow-down">Power -</div>
-            <div class="mobile-btn" id="btn-pow-up">Power +</div>
-            <div class="mobile-btn" id="btn-wpn">Next Wpn</div>
-            <div class="mobile-btn" id="btn-fire">FIRE</div>
+        <!-- Player 1 Action (Right side) -->
+        <div class="action-pad">
+            <div class="m-btn" id="btn-shoot">FIRE</div>
         </div>
     </div>
+
+    <h1>Tanks of Chaos</h1>
+    <div id="ui">
+        <div class="player-ui" id="p1-ui">
+            <h2 style="color: #FF5722; margin:0 0 5px 0;">Player 1 (Left)</h2>
+            <div>Health: <span id="p1-hp" class="stat">100</span> | Power: <span id="p1-power" class="stat">50</span> | Angle: <span id="p1-angle" class="stat">45</span>&deg;</div>
+            <div style="margin-top: 5px;">Weapon: <span id="p1-weapon" class="weapon-badge" style="background: #4CAF50;">Standard</span></div>
+            <div class="controls"><b>W/S:</b> Angle &nbsp;|&nbsp; <b>A/D:</b> Power &nbsp;|&nbsp; <b>1-4:</b> Weapon &nbsp;|&nbsp; <b>Space:</b> Fire</div>
+        </div>
+        <div class="turn-indicator" id="turn-display">Player 1's Turn</div>
+        <div class="player-ui" style="text-align: right;" id="p2-ui">
+            <h2 style="color: #2196F3; margin:0 0 5px 0;">Player 2 (Right)</h2>
+            <div>Health: <span id="p2-hp" class="stat">100</span> | Power: <span id="p2-power" class="stat">50</span> | Angle: <span id="p2-angle" class="stat">135</span>&deg;</div>
+            <div style="margin-top: 5px;">Weapon: <span id="p2-weapon" class="weapon-badge" style="background: #4CAF50;">Standard</span></div>
+            <div class="controls"><b>&uarr;/&darr;:</b> Angle &nbsp;|&nbsp; <b>&larr;/&rarr;:</b> Power &nbsp;|&nbsp; <b>1-4:</b> Weapon &nbsp;|&nbsp; <b>Enter:</b> Fire</div>
+        </div>
+    </div>
+    <canvas id="gameCanvas" width="1000" height="550"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -192,51 +279,12 @@
             }
         });
 
-        // Touch Controls State
-        const tKeys = { angUp: false, angDown: false, powUp: false, powDown: false };
-
-        function bindTouch(id, prop) {
-            const el = document.getElementById(id);
-            const start = (e) => { e.preventDefault(); tKeys[prop] = true; };
-            const end = (e) => { e.preventDefault(); tKeys[prop] = false; };
-            el.addEventListener('touchstart', start, {passive: false});
-            el.addEventListener('mousedown', start);
-            el.addEventListener('touchend', end);
-            el.addEventListener('mouseup', end);
-            el.addEventListener('mouseleave', end);
-        }
-        bindTouch('btn-ang-up', 'angUp');
-        bindTouch('btn-ang-down', 'angDown');
-        bindTouch('btn-pow-up', 'powUp');
-        bindTouch('btn-pow-down', 'powDown');
-
-        const btnWpn = document.getElementById('btn-wpn');
-        const wpnAction = (e) => {
-            e.preventDefault();
-            if (state !== 'aiming') return;
-            let currentPlayer = turn === 1 ? p1 : p2;
-            currentPlayer.weaponIdx = (currentPlayer.weaponIdx + 1) % weapons.length;
-            updateUI();
-        };
-        btnWpn.addEventListener('touchstart', wpnAction, {passive: false});
-        btnWpn.addEventListener('mousedown', wpnAction);
-
-        const btnFire = document.getElementById('btn-fire');
-        const fireAction = (e) => {
-            e.preventDefault();
-            if (state === 'aiming') {
-                fire(turn === 1 ? p1 : p2);
-            }
-        };
-        btnFire.addEventListener('touchstart', fireAction, {passive: false});
-        btnFire.addEventListener('mousedown', fireAction);
-
-
         function fire(player) {
             state = 'firing';
             let wp = weapons[player.weaponIdx];
             let rad = player.angle * Math.PI / 180;
 
+            // Calculate barrel tip
             let startX = player.x + player.w/2 + Math.cos(rad) * 35;
             let startY = player.y - Math.sin(rad) * 35;
 
@@ -244,7 +292,7 @@
                 projectiles.push({
                     x: startX, y: startY,
                     vx: Math.cos(rad) * 50, vy: -Math.sin(rad) * 50,
-                    type: 'laser', wp: wp, active: true, life: 50
+                    type: 'laser', wp: wp, active: true, life: 50 // frames before it fades if missed
                 });
             } else {
                 projectiles.push({
@@ -259,18 +307,17 @@
 
         function updatePhysics() {
             if (state === 'aiming') {
-                let currentPlayer = turn === 1 ? p1 : p2;
-
-                let angUp = tKeys.angUp || (turn === 1 ? keys['KeyW'] : keys['ArrowUp']);
-                let angDown = tKeys.angDown || (turn === 1 ? keys['KeyS'] : keys['ArrowDown']);
-                let powUp = tKeys.powUp || (turn === 1 ? keys['KeyD'] : keys['ArrowRight']);
-                let powDown = tKeys.powDown || (turn === 1 ? keys['KeyA'] : keys['ArrowLeft']);
-
-                if (angUp) currentPlayer.angle = Math.min(180, currentPlayer.angle + 1);
-                if (angDown) currentPlayer.angle = Math.max(0, currentPlayer.angle - 1);
-                if (powUp) currentPlayer.power = Math.min(100, currentPlayer.power + 1);
-                if (powDown) currentPlayer.power = Math.max(10, currentPlayer.power - 1);
-
+                if (turn === 1) {
+                    if (keys['KeyW']) p1.angle = Math.min(180, p1.angle + 1);
+                    if (keys['KeyS']) p1.angle = Math.max(0, p1.angle - 1);
+                    if (keys['KeyA']) p1.power = Math.max(10, p1.power - 1);
+                    if (keys['KeyD']) p1.power = Math.min(100, p1.power + 1);
+                } else {
+                    if (keys['ArrowUp']) p2.angle = Math.min(180, p2.angle + 1);
+                    if (keys['ArrowDown']) p2.angle = Math.max(0, p2.angle - 1);
+                    if (keys['ArrowLeft']) p2.power = Math.max(10, p2.power - 1);
+                    if (keys['ArrowRight']) p2.power = Math.min(100, p2.power + 1);
+                }
                 updateUI();
             }
 
@@ -283,19 +330,21 @@
                     p.life--;
                     if(p.life <= 0) p.active = false;
                 } else {
-                    p.vy += 0.25; 
+                    p.vy += 0.25; // Gravity
                     p.x += p.vx;
                     p.y += p.vy;
                 }
 
                 let hit = false;
-                if (p.y > 500) hit = true; 
-                if (p.x < -100 || p.x > canvas.width + 100 || p.y > canvas.height) p.active = false; 
+                if (p.y > 500) hit = true; // Ground
+                if (p.x < -100 || p.x > canvas.width + 100 || p.y > canvas.height) p.active = false; // Out of bounds
 
+                // Collisions with barriers
                 barriers.forEach(b => {
                     if (b.hp > 0 && p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) hit = true;
                 });
 
+                // Collisions with tanks
                 [p1, p2].forEach(t => {
                     if (t.hp > 0 && p.x > t.x && p.x < t.x + t.w && p.y > t.y && p.y < t.y + t.h) hit = true;
                 });
@@ -304,6 +353,7 @@
                     p.active = false;
                     createExplosion(p.x, p.y, p.wp);
 
+                    // Meteor shower effect - drops additional meteors from above
                     if (p.type === 'meteor' && !p.isSubMeteor) {
                         for(let i=0; i<6; i++) {
                             projectiles.push({
@@ -326,6 +376,7 @@
             explosions.forEach(e => e.life -= 1);
             explosions = explosions.filter(e => e.life > 0);
 
+            // Turn switching logic
             if (state === 'firing' && projectiles.length === 0 && explosions.length === 0) {
                 turn = turn === 1 ? 2 : 1;
                 state = 'aiming';
@@ -336,8 +387,10 @@
         function createExplosion(x, y, wp) {
             explosions.push({ x: x, y: y, radius: wp.radius, life: 35, maxLife: 35, color: wp.color });
 
+            // Apply Damage
             let damageRadius = wp.radius;
 
+            // Damage Tanks
             [p1, p2].forEach(t => {
                 if (t.hp <= 0) return;
                 let cx = t.x + t.w/2;
@@ -349,6 +402,7 @@
                 }
             });
 
+            // Damage Barriers
             barriers.forEach(b => {
                 if (b.hp <= 0) return;
                 let cx = b.x + b.w/2;
@@ -364,9 +418,11 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Draw ground
             ctx.fillStyle = '#4CAF50';
             ctx.fillRect(0, 500, canvas.width, 50);
 
+            // Ground decorative grass bits
             ctx.fillStyle = '#388E3C';
             for(let i=0; i<canvas.width; i+=40) {
                 ctx.beginPath();
@@ -376,14 +432,17 @@
                 ctx.fill();
             }
 
+            // Draw barriers
             barriers.forEach(b => {
                 if (b.hp > 0) {
+                    // Crate effect
                     ctx.fillStyle = b.color;
                     ctx.fillRect(b.x, b.y, b.w, b.h);
                     ctx.strokeStyle = '#3E2723';
                     ctx.lineWidth = 2;
                     ctx.strokeRect(b.x, b.y, b.w, b.h);
 
+                    // HP Bar
                     ctx.fillStyle = '#ff0000';
                     ctx.fillRect(b.x, b.y - 12, b.w, 6);
                     ctx.fillStyle = '#00ff00';
@@ -391,19 +450,22 @@
                 }
             });
 
+            // Draw tanks
             [p1, p2].forEach(t => {
                 if (t.hp <= 0) return;
                 ctx.save();
                 ctx.translate(t.x + t.w/2, t.y + t.h);
 
+                // Barrel
                 ctx.save();
                 ctx.rotate(-t.angle * Math.PI / 180);
                 ctx.fillStyle = '#424242';
                 ctx.fillRect(0, -6, 35, 12);
-                ctx.fillStyle = '#212121'; 
+                ctx.fillStyle = '#212121'; // Barrel tip
                 ctx.fillRect(30, -8, 8, 16);
                 ctx.restore();
 
+                // Tank Body Top
                 ctx.fillStyle = t.color;
                 ctx.beginPath();
                 ctx.moveTo(-t.w/2 + 5, -t.h);
@@ -412,11 +474,13 @@
                 ctx.lineTo(-t.w/2, -t.h/2);
                 ctx.fill();
 
-                ctx.fillStyle = '#333'; 
+                // Tank Body Base
+                ctx.fillStyle = '#333'; // Treads
                 ctx.beginPath();
                 ctx.roundRect(-t.w/2 - 5, -t.h/2, t.w + 10, t.h/2, 5);
                 ctx.fill();
 
+                // Wheels
                 ctx.fillStyle = '#9E9E9E';
                 for(let i = -t.w/2; i < t.w/2; i+=12) {
                     ctx.beginPath();
@@ -427,6 +491,7 @@
                 ctx.restore();
             });
 
+            // Draw projectiles
             projectiles.forEach(p => {
                 if (p.type === 'laser') {
                     ctx.strokeStyle = p.wp.color;
@@ -435,6 +500,7 @@
                     ctx.moveTo(p.x, p.y);
                     ctx.lineTo(p.x - p.vx*1.5, p.y - p.vy*1.5);
                     ctx.stroke();
+                    // Glow
                     ctx.strokeStyle = 'white';
                     ctx.lineWidth = 1;
                     ctx.stroke();
@@ -443,6 +509,7 @@
                     ctx.arc(p.x, p.y, p.type === 'nuke' ? 8 : 5, 0, Math.PI*2);
                     ctx.fillStyle = p.wp.color;
                     ctx.fill();
+                    // Trail
                     ctx.beginPath();
                     ctx.arc(p.x - p.vx*0.5, p.y - p.vy*0.5, 3, 0, Math.PI*2);
                     ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -450,9 +517,10 @@
                 }
             });
 
+            // Draw explosions
             explosions.forEach(e => {
                 ctx.beginPath();
-                let r = e.radius * (1 - Math.pow(e.life/e.maxLife - 1, 2)); 
+                let r = e.radius * (1 - Math.pow(e.life/e.maxLife - 1, 2)); // Ease out
                 ctx.arc(e.x, e.y, r, 0, Math.PI*2);
 
                 let gradient = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
@@ -467,6 +535,7 @@
                 ctx.globalAlpha = 1.0;
             });
 
+            // Game Over Text
             if (p1.hp <= 0 || p2.hp <= 0) {
                 ctx.fillStyle = 'rgba(0,0,0,0.8)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -518,6 +587,39 @@
 
         updateUI();
         loop();
+    
+        // --- MOBILE TOUCH MAPPING (PLAYER 1 ONLY) ---
+        // For a mobile device, we assume it's a single player holding the phone
+        const bindTouch = (id, keyCode) => {
+            const btn = document.getElementById(id);
+            if(!btn) return;
+            btn.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                keys[keyCode] = true; 
+            }, {passive: false});
+            btn.addEventListener('touchend', (e) => { 
+                e.preventDefault(); 
+                keys[keyCode] = false; 
+            }, {passive: false});
+            btn.addEventListener('touchcancel', (e) => { 
+                e.preventDefault(); 
+                keys[keyCode] = false; 
+            }, {passive: false});
+        };
+
+        // Map mobile buttons to Player 1 keys (W, A, S, D, and Space for shooting)
+        // Key codes: W=87, A=65, S=83, D=68, Space=32
+        bindTouch('btn-w', 87);
+        bindTouch('btn-a', 65);
+        bindTouch('btn-s', 83);
+        bindTouch('btn-d', 68);
+        bindTouch('btn-shoot', 32);
+
+        // Auto-reload on orientation change
+        window.addEventListener("orientationchange", function() {
+            setTimeout(() => location.reload(), 500);
+        });
+
     </script>
 </body>
 </html>

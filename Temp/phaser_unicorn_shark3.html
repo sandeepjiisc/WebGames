@@ -77,6 +77,72 @@
             color: white;
             z-index: 10;
         }
+    
+        /* MOBILE CONTROLS OVERLAY */
+        #mobile-controls {
+            display: none; /* Hidden by default on desktop */
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            z-index: 100;
+            pointer-events: none; /* Let touches pass through the container */
+        }
+
+        .d-pad {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto; /* Re-enable for buttons */
+        }
+
+        .action-pad {
+            display: flex;
+            align-items: flex-end;
+            pointer-events: auto;
+        }
+
+        .m-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* Prevent browser handling like pinch-zoom */
+        }
+
+        .m-btn:active {
+            background: rgba(255, 255, 255, 0.6);
+            transform: scale(0.95);
+        }
+
+        #btn-action {
+            width: 80px;
+            height: 80px;
+            background: rgba(224, 64, 251, 0.4);
+            border-color: rgba(224, 64, 251, 0.8);
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex; /* Show on mobile devices */
+            }
+            .controls {
+                display: none; /* Hide keyboard instructions on mobile */
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -89,7 +155,18 @@
             <h2>Game Over!</h2>
             <button onclick="location.reload()">Play Again</button>
         </div>
+    
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="m-btn" id="btn-left">⬅️</div>
+            <div class="m-btn" id="btn-right">➡️</div>
+        </div>
+        <div class="action-pad">
+            <div class="m-btn" id="btn-action">JUMP</div>
+        </div>
     </div>
+
+        </div>
 
     <div class="controls">
         <strong>Rescue Phase:</strong> ⬅️ ➡️ to Move | <strong>UP Arrow</strong> to Jump<br>
@@ -451,6 +528,55 @@
                 }
             }
         });
+    
+
+        // FIXED Mobile Touch Mapping for PixiJS
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnAction = document.getElementById('btn-action');
+
+        // Use {passive: false} to ensure preventDefault works on mobile browsers
+        const addTouch = (btn, actionDown, actionUp) => {
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); actionDown(); }, {passive: false});
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); actionUp(); }, {passive: false});
+            btn.addEventListener('touchcancel', (e) => { e.preventDefault(); actionUp(); }, {passive: false});
+        };
+
+        addTouch(btnLeft, 
+            () => { keys.ArrowLeft = true; }, 
+            () => { keys.ArrowLeft = false; }
+        );
+
+        addTouch(btnRight, 
+            () => { keys.ArrowRight = true; }, 
+            () => { keys.ArrowRight = false; }
+        );
+
+        addTouch(btnAction, 
+            () => { 
+                keys.Space = true; 
+                keys.ArrowUp = true;
+
+                // CRITICAL FIX: The PixiJS code originally fired jump inside the keyboard event listener.
+                // We must manually trigger the upward thrust here for mobile.
+                if (phase === 'rescue' && !playerState.isJumping) {
+                    playerState.vy = -12; // Jump power
+                    playerState.isJumping = true;
+                }
+            }, 
+            () => { 
+                keys.Space = false; 
+                keys.ArrowUp = false;
+            }
+        );
+
+        // Update Action text based on phase
+        setInterval(() => {
+            if(typeof phase !== 'undefined') {
+                btnAction.innerText = phase === 'boss' ? 'FIRE' : 'JUMP';
+            }
+        }, 500);
+
     </script>
 </body>
 </html>
