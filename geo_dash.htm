@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Geometry Dash - Math Run</title>
+    <style>
+        body {
+            margin: 0; overflow: hidden;
+            background: #1e293b; color: white;
+            font-family: sans-serif;
+            touch-action: none;
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #ui {
+            position: absolute; top: 20px; left: 20px;
+            font-size: 24px; font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+        }
+        #equation-display {
+            position: absolute; top: 20px; right: 20px;
+            font-size: 32px; font-weight: bold; color: #fbbf24;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+        }
+        .overlay {
+            position: absolute; top:0; left:0; right:0; bottom:0;
+            background: rgba(0,0,0,0.7);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            display: none;
+        }
+        .overlay h1 { color: #f43f5e; font-size: 3rem; margin: 0;}
+        .overlay button {
+            margin-top: 20px; padding: 15px 30px; font-size: 1.5rem;
+            background: #3b82f6; color: white; border: none; border-radius: 8px;
+            cursor: pointer; box-shadow: 0 4px 0 #2563eb;
+        }
+        .instruction {
+            position: absolute; bottom: 30px; width: 100%; text-align: center;
+            font-size: 1.2rem; color: rgba(255,255,255,0.5); pointer-events: none;
+        }
+    
+    </style>
+</head>
+<body>
+    <div id="ui">Score: <span id="score">0</span></div>
+    <div id="equation-display"></div>
+    <div class="instruction">Tap / Space to Jump</div>
+    <canvas id="canvas"></canvas>
+    
+    <div class="overlay" id="game-over">
+        <h1>Crashed!</h1>
+        <button onclick="resetGame()">Try Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        
+        let player = { x: 100, y: 0, size: 40, vy: 0, jumpPower: -15, gravity: 0.8, isGrounded: false };
+        let obstacles = [];
+        let speed = 6;
+        let score = 0;
+        let gameOver = false;
+        let floorY;
+        let currentTarget = 0;
+        let frames = 0;
+        
+        function resize() {
+            width = window.innerWidth; height = window.innerHeight;
+            canvas.width = width; canvas.height = height;
+            floorY = height - 100;
+            if(!gameOver) player.y = floorY - player.size;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function jump() {
+            if (player.isGrounded && !gameOver) {
+                player.vy = player.jumpPower;
+                player.isGrounded = false;
+            }
+        }
+        window.addEventListener('keydown', e => { if(e.code === 'Space') jump(); });
+        window.addEventListener('touchstart', jump);
+        window.addEventListener('mousedown', jump);
+
+        function generateEquation() {
+            let a = Math.floor(Math.random() * 10) + 1;
+            let b = Math.floor(Math.random() * 10) + 1;
+            currentTarget = a + b;
+            document.getElementById('equation-display').innerText = `${a} + ${b} = ?`;
+        }
+
+        function spawnObstacles() {
+            if (frames % 120 === 0) {
+                // Spawn a correct and incorrect gate
+                let gapX = width;
+                let wrongVal = currentTarget + (Math.random() > 0.5 ? 1 : -1);
+                
+                // One high, one low
+                let highIsCorrect = Math.random() > 0.5;
+                
+                obstacles.push({
+                    x: gapX, y: floorY - 50, w: 40, h: 50,
+                    val: highIsCorrect ? wrongVal : currentTarget,
+                    isCorrect: !highIsCorrect, passed: false
+                });
+                
+                obstacles.push({
+                    x: gapX, y: floorY - 180, w: 40, h: 50,
+                    val: highIsCorrect ? currentTarget : wrongVal,
+                    isCorrect: highIsCorrect, passed: false
+                });
+            }
+        }
+
+        function update() {
+            if (gameOver) return;
+            
+            // Physics
+            player.vy += player.gravity;
+            player.y += player.vy;
+            
+            if (player.y + player.size >= floorY) {
+                player.y = floorY - player.size;
+                player.vy = 0;
+                player.isGrounded = true;
+            }
+
+            // Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= speed;
+                
+                // Collision
+                if (player.x < obs.x + obs.w && player.x + player.size > obs.x &&
+                    player.y < obs.y + obs.h && player.y + player.size > obs.y) {
+                    if (obs.isCorrect) {
+                        if(!obs.passed) {
+                            score += 10;
+                            document.getElementById('score').innerText = score;
+                            generateEquation();
+                            obs.passed = true;
+                            speed += 0.1;
+                        }
+                    } else {
+                        endGame();
+                    }
+                }
+                
+                if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+            }
+            frames++;
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Floor
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, floorY, width, height - floorY);
+            ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(0, floorY); ctx.lineTo(width, floorY); ctx.stroke();
+
+            // Player
+            ctx.fillStyle = '#10b981';
+            ctx.shadowBlur = 15; ctx.shadowColor = '#10b981';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+            ctx.shadowBlur = 0;
+
+            // Obstacles
+            obstacles.forEach(obs => {
+                ctx.fillStyle = obs.isCorrect ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.5)';
+                ctx.strokeStyle = obs.isCorrect ? '#3b82f6' : '#ef4444';
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+                
+                ctx.fillStyle = '#fff'; ctx.font = '20px Arial';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(obs.val, obs.x + obs.w/2, obs.y - 15);
+            });
+        }
+
+        function endGame() {
+            gameOver = true;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+
+        window.resetGame = function() {
+            gameOver = false; score = 0; speed = 6; frames = 0;
+            obstacles = []; player.y = floorY - player.size; player.vy = 0;
+            document.getElementById('score').innerText = score;
+            document.getElementById('game-over').style.display = 'none';
+            generateEquation();
+            update();
+        }
+
+        generateEquation();
+        update();
+    </script>
+</body>
+</html>

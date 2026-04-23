@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Snake</title>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+        }
+        h1 {
+            color: #34d399;
+            text-shadow: 0 0 10px #10b981;
+            margin: 5px 0;
+            font-size: 24px;
+        }
+        #ui {
+            display: flex;
+            justify-content: space-between;
+            width: 95%;
+            max-width: 400px;
+            margin-bottom: 10px;
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #334155;
+        }
+        #equation {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fbbf24;
+            text-shadow: 0 0 8px #f59e0b;
+        }
+        canvas {
+            background: #020617;
+            border: 2px solid #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+            border-radius: 5px;
+            max-width: 95%;
+            aspect-ratio: 1/1;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+            width: 200px;
+        }
+        .controls button {
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid #3b82f6;
+            color: white;
+            font-size: 24px;
+            padding: 15px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .controls button:active {
+            background: rgba(59, 130, 246, 0.6);
+        }
+        #btn-up { grid-column: 2; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+        
+        #game-over {
+            position: absolute;
+            background: rgba(0,0,0,0.85);
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        #game-over button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            background: #10b981;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+    
+    </style>
+</head>
+<body>
+    <h1>Math Snake</h1>
+    <div id="ui">
+        <div>Score: <span id="score">0</span></div>
+        <div id="equation">Solve: ?</div>
+    </div>
+    
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+    <div class="controls">
+        <button id="btn-up">⬆️</button>
+        <button id="btn-left">⬅️</button>
+        <button id="btn-down">⬇️</button>
+        <button id="btn-right">➡️</button>
+    </div>
+
+    <div id="game-over">
+        <h2 style="color: #ef4444; font-size: 2rem;">System Crash!</h2>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button onclick="startGame()">Reboot System</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        
+        let snake = [];
+        let dx = 0;
+        let dy = 0;
+        let food = [];
+        let score = 0;
+        let currentAnswer = 0;
+        let gameLoop;
+
+        function startGame() {
+            snake = [{x: 10, y: 10}];
+            dx = 0; dy = 0;
+            score = 0;
+            document.getElementById('score').innerText = score;
+            document.getElementById('game-over').style.display = 'none';
+            generatePuzzle();
+            if(gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(update, 150);
+        }
+
+        function generatePuzzle() {
+            let a = Math.floor(Math.random() * 10) + 1;
+            let b = Math.floor(Math.random() * 10) + 1;
+            let op = Math.random() > 0.5 ? '+' : '-';
+            if (op === '-' && a < b) [a, b] = [b, a]; // keep it positive
+            
+            currentAnswer = op === '+' ? a + b : a - b;
+            document.getElementById('equation').innerText = `${a} ${op} ${b} = ?`;
+
+            food = [];
+            // Correct answer
+            food.push({
+                x: Math.floor(Math.random() * tileCount),
+                y: Math.floor(Math.random() * tileCount),
+                val: currentAnswer,
+                isCorrect: true
+            });
+            // 2 Wrong answers
+            for(let i=0; i<2; i++) {
+                let wrongVal = currentAnswer + Math.floor(Math.random() * 10) - 5;
+                if(wrongVal === currentAnswer) wrongVal += 1;
+                food.push({
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount),
+                    val: wrongVal,
+                    isCorrect: false
+                });
+            }
+        }
+
+        function update() {
+            // Move
+            let head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            
+            // Wall collision (wrap around)
+            if(head.x < 0) head.x = tileCount - 1;
+            if(head.x >= tileCount) head.x = 0;
+            if(head.y < 0) head.y = tileCount - 1;
+            if(head.y >= tileCount) head.y = 0;
+
+            // Self collision
+            if (dx !== 0 || dy !== 0) {
+                for(let i=0; i<snake.length; i++) {
+                    if(head.x === snake[i].x && head.y === snake[i].y) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+
+            snake.unshift(head);
+
+            // Check food collision
+            let ate = false;
+            for(let i=0; i<food.length; i++) {
+                if(head.x === food[i].x && head.y === food[i].y) {
+                    if(food[i].isCorrect) {
+                        score += 10;
+                        document.getElementById('score').innerText = score;
+                        generatePuzzle();
+                        ate = true;
+                    } else {
+                        gameOver();
+                        return;
+                    }
+                    break;
+                }
+            }
+            if(!ate && (dx !== 0 || dy !== 0)) {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw food
+            food.forEach(f => {
+                ctx.fillStyle = f.isCorrect ? '#10b981' : '#ef4444';
+                ctx.beginPath();
+                ctx.arc(f.x*gridSize + gridSize/2, f.y*gridSize + gridSize/2, gridSize/2 - 2, 0, Math.PI*2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(f.val, f.x*gridSize + gridSize/2, f.y*gridSize + gridSize/2);
+            });
+
+            // Draw snake
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#34d399' : '#059669';
+                ctx.fillRect(segment.x*gridSize + 1, segment.y*gridSize + 1, gridSize - 2, gridSize - 2);
+            });
+        }
+
+        function gameOver() {
+            clearInterval(gameLoop);
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+
+        // Controls
+        function setDir(newDx, newDy) {
+            if(dx === 0 && dy === 0) { dx = newDx; dy = newDy; return; }
+            if(dx === -newDx && dy === -newDy) return; // Prevent reversing
+            dx = newDx; dy = newDy;
+        }
+
+        window.addEventListener('keydown', e => {
+            if(e.key === 'ArrowUp') setDir(0, -1);
+            if(e.key === 'ArrowDown') setDir(0, 1);
+            if(e.key === 'ArrowLeft') setDir(-1, 0);
+            if(e.key === 'ArrowRight') setDir(1, 0);
+        });
+
+        document.getElementById('btn-up').addEventListener('touchstart', e => {e.preventDefault(); setDir(0, -1);});
+        document.getElementById('btn-down').addEventListener('touchstart', e => {e.preventDefault(); setDir(0, 1);});
+        document.getElementById('btn-left').addEventListener('touchstart', e => {e.preventDefault(); setDir(-1, 0);});
+        document.getElementById('btn-right').addEventListener('touchstart', e => {e.preventDefault(); setDir(1, 0);});
+
+        // Mouse fallbacks
+        document.getElementById('btn-up').addEventListener('mousedown', () => setDir(0, -1));
+        document.getElementById('btn-down').addEventListener('mousedown', () => setDir(0, 1));
+        document.getElementById('btn-left').addEventListener('mousedown', () => setDir(-1, 0));
+        document.getElementById('btn-right').addEventListener('mousedown', () => setDir(1, 0));
+
+        startGame();
+        draw(); // initial draw
+    </script>
+</body>
+</html>

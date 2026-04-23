@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math Sprint</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background: linear-gradient(135deg, #0f172a, #1e1b4b);
+            color: white;
+            font-family: 'Arial Rounded MT Bold', sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh;
+            touch-action: none;
+            overflow: hidden;
+        }
+        .arena {
+            width: 90%; max-width: 500px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 30px 20px;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            text-align: center;
+            position: relative;
+        }
+        .hud {
+            display: flex; justify-content: space-between;
+            margin-bottom: 20px; font-size: 1.2rem;
+            color: #94a3b8;
+        }
+        .hud span { color: #fff; font-weight: bold; }
+        
+        .progress-container {
+            width: 100%; height: 10px;
+            background: #334155; border-radius: 5px;
+            margin-bottom: 30px; overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%; width: 100%;
+            background: linear-gradient(90deg, #10b981, #34d399);
+            transition: width 0.1s linear;
+        }
+        
+        #question {
+            font-size: 3.5rem; margin-bottom: 30px;
+            text-shadow: 0 0 15px rgba(255,255,255,0.5);
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
+
+        .answers {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .ans-btn {
+            background: #3b82f6; color: white;
+            border: none; padding: 20px;
+            border-radius: 12px; font-size: 2rem;
+            font-weight: bold; cursor: pointer;
+            box-shadow: 0 5px 0 #2563eb;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .ans-btn:active {
+            transform: translateY(5px);
+            box-shadow: 0 0 0 #2563eb;
+        }
+        
+        #game-over {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 20px;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        #game-over h2 { color: #ef4444; font-size: 2.5rem; margin: 0 0 10px 0; }
+        #game-over p { font-size: 1.5rem; }
+        .restart-btn {
+            margin-top: 20px; background: #10b981; box-shadow: 0 5px 0 #059669;
+        }
+        .restart-btn:active { box-shadow: 0 0 0 #059669; }
+    
+    </style>
+</head>
+<body>
+    <div class="arena">
+        <div class="hud">
+            <div>Score: <span id="score">0</span></div>
+            <div>Combo: <span id="combo">x1</span></div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="time-bar"></div>
+        </div>
+
+        <div id="question">3 + 5</div>
+
+        <div class="answers">
+            <button class="ans-btn" onclick="check(0)" id="btn0">7</button>
+            <button class="ans-btn" onclick="check(1)" id="btn1">8</button>
+            <button class="ans-btn" onclick="check(2)" id="btn2">9</button>
+            <button class="ans-btn" onclick="check(3)" id="btn3">6</button>
+        </div>
+
+        <div id="game-over">
+            <h2>Time's Up!</h2>
+            <p>Score: <span id="final-score">0</span></p>
+            <button class="ans-btn restart-btn" onclick="startGame()">Race Again</button>
+        </div>
+    </div>
+
+    <script>
+        let score = 0;
+        let combo = 1;
+        let timeLeft = 100; // max 100
+        let currentAns = 0;
+        let timerId;
+
+        function startGame() {
+            score = 0; combo = 1; timeLeft = 100;
+            document.getElementById('score').innerText = score;
+            document.getElementById('combo').innerText = 'x' + combo;
+            document.getElementById('game-over').style.display = 'none';
+            generateQuestion();
+            if(timerId) clearInterval(timerId);
+            timerId = setInterval(updateTime, 50);
+        }
+
+        function updateTime() {
+            timeLeft -= 0.5 + (score * 0.01); // speeds up as score increases
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                endGame();
+            }
+            document.getElementById('time-bar').style.width = timeLeft + '%';
+            if(timeLeft < 25) document.getElementById('time-bar').style.background = '#ef4444';
+            else document.getElementById('time-bar').style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+        }
+
+        function generateQuestion() {
+            let a = Math.floor(Math.random() * 20) + 1;
+            let b = Math.floor(Math.random() * 20) + 1;
+            let ops = ['+', '-', '*'];
+            let op = ops[Math.floor(Math.random() * (score > 20 ? 3 : 2))]; // Introduce * later
+            
+            if (op === '-' && a < b) [a, b] = [b, a];
+            if (op === '*') { a = a%10 + 1; b = b%10 + 1; }
+
+            document.getElementById('question').innerText = `${a} ${op} ${b}`;
+            currentAns = eval(`${a} ${op} ${b}`);
+
+            let answers = [currentAns];
+            while(answers.length < 4) {
+                let wrong = currentAns + Math.floor(Math.random() * 10) - 5;
+                if (!answers.includes(wrong) && wrong !== currentAns) answers.push(wrong);
+            }
+            answers.sort(() => Math.random() - 0.5);
+
+            for(let i=0; i<4; i++) {
+                let btn = document.getElementById('btn'+i);
+                btn.innerText = answers[i];
+                btn.dataset.val = answers[i];
+            }
+        }
+
+        function check(idx) {
+            let btn = document.getElementById('btn'+idx);
+            if (parseInt(btn.dataset.val) === currentAns) {
+                score += 10 * combo;
+                combo++;
+                timeLeft = Math.min(100, timeLeft + 10);
+                document.getElementById('score').innerText = score;
+                document.getElementById('combo').innerText = 'x' + combo;
+                generateQuestion();
+            } else {
+                combo = 1;
+                timeLeft -= 15;
+                document.getElementById('combo').innerText = 'x' + combo;
+                document.getElementById('time-bar').style.background = '#ef4444';
+            }
+        }
+
+        function endGame() {
+            clearInterval(timerId);
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over').style.display = 'flex';
+        }
+
+        startGame();
+    </script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tower of Hanoi - Silent Algorithm</title>
+    <style>
+        .back-to-hub {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(15, 23, 42, 0.8);
+            color: #38bdf8;
+            border: 2px solid #38bdf8;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            text-decoration: none;
+            font-family: sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+        .back-to-hub:hover {
+            background: #38bdf8;
+            color: #0f172a;
+        }
+        body {
+            margin: 0; padding: 0;
+            background: linear-gradient(180deg, #1e293b, #020617);
+            color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden; touch-action: none;
+            user-select: none; -webkit-user-select: none;
+        }
+        h1 { margin-bottom: 5px; font-weight: 300; letter-spacing: 2px; color: #38bdf8;}
+        #ui { margin-bottom: 40px; font-size: 1.2rem; color: #94a3b8; display: flex; gap: 20px;}
+        
+        .game-area {
+            display: flex; justify-content: space-around; align-items: flex-end;
+            width: 90%; max-width: 800px; height: 300px;
+            position: relative;
+            padding-bottom: 20px;
+            border-bottom: 10px solid #334155;
+            border-radius: 5px;
+        }
+        
+        .peg-container {
+            width: 30%; height: 100%; position: relative;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+            cursor: pointer;
+        }
+        .peg {
+            position: absolute; bottom: 0; width: 15px; height: 80%;
+            background: #475569; border-radius: 10px 10px 0 0;
+            z-index: 1;
+        }
+        
+        .disk {
+            height: 30px; border-radius: 15px; z-index: 2;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: rgba(255,255,255,0.5);
+        }
+        .disk.selected {
+            transform: translateY(-20px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.8);
+            border: 2px solid #fff;
+        }
+
+        #win-msg {
+            position: absolute; top: 20%;
+            font-size: 2rem; color: #10b981;
+            display: none; flex-direction: column; align-items: center;
+            z-index: 10;
+        }
+        button {
+            margin-top: 20px; padding: 10px 20px; background: #38bdf8; border: none;
+            border-radius: 5px; color: #0f172a; font-weight: bold; font-size: 1rem; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    <h1>TOWER OF HANOI</h1>
+    <div id="ui">
+        <div>Moves: <span id="moves">0</span></div>
+        <div>Disks: 
+            <select id="disk-count" onchange="init()">
+                <option value="3">3</option>
+                <option value="4" selected>4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="game-area">
+        <div class="peg-container" id="peg-0" onclick="handlePegClick(0)">
+            <div class="peg"></div>
+        </div>
+        <div class="peg-container" id="peg-1" onclick="handlePegClick(1)">
+            <div class="peg"></div>
+        </div>
+        <div class="peg-container" id="peg-2" onclick="handlePegClick(2)">
+            <div class="peg"></div>
+        </div>
+    </div>
+
+    <div id="win-msg">
+        <div>Ritual Complete.</div>
+        <button onclick="init()">Reset Ritual</button>
+    </div>
+
+    <script>
+        let pegs = [[], [], []];
+        let numDisks = 4;
+        let moves = 0;
+        let selectedPeg = null;
+        
+        const colors = ['#f43f5e', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#d946ef'];
+
+        function init() {
+            numDisks = parseInt(document.getElementById('disk-count').value);
+            pegs = [[], [], []];
+            for (let i = numDisks; i > 0; i--) pegs[0].push(i);
+            moves = 0; selectedPeg = null;
+            document.getElementById('moves').innerText = moves;
+            document.getElementById('win-msg').style.display = 'none';
+            render();
+        }
+
+        function render() {
+            for (let i = 0; i < 3; i++) {
+                const container = document.getElementById(`peg-${i}`);
+                // Remove existing disks
+                Array.from(container.children).forEach(child => {
+                    if(child.className.includes('disk')) child.remove();
+                });
+                
+                // Draw disks
+                pegs[i].forEach((diskSize, index) => {
+                    const el = document.createElement('div');
+                    el.className = 'disk';
+                    if (selectedPeg === i && index === pegs[i].length - 1) el.classList.add('selected');
+                    
+                    const widthPercent = 30 + (diskSize / numDisks) * 60; // 30% to 90%
+                    el.style.width = `${widthPercent}%`;
+                    el.style.backgroundColor = colors[diskSize - 1];
+                    el.innerText = diskSize;
+                    container.appendChild(el);
+                });
+            }
+        }
+
+        function handlePegClick(pegIndex) {
+            if (document.getElementById('win-msg').style.display === 'flex') return;
+
+            if (selectedPeg === null) {
+                // Select top disk
+                if (pegs[pegIndex].length > 0) {
+                    selectedPeg = pegIndex;
+                    render();
+                }
+            } else {
+                // Try to move
+                const sourcePeg = pegs[selectedPeg];
+                const destPeg = pegs[pegIndex];
+                
+                if (selectedPeg === pegIndex) {
+                    // Deselect
+                    selectedPeg = null;
+                    render();
+                    return;
+                }
+
+                const diskToMove = sourcePeg[sourcePeg.length - 1];
+                const topDestDisk = destPeg.length > 0 ? destPeg[destPeg.length - 1] : Infinity;
+
+                if (diskToMove < topDestDisk) {
+                    // Valid move
+                    destPeg.push(sourcePeg.pop());
+                    moves++;
+                    document.getElementById('moves').innerText = moves;
+                    selectedPeg = null;
+                    render();
+                    checkWin();
+                } else {
+                    // Invalid move - shake or ignore
+                    selectedPeg = null;
+                    render();
+                }
+            }
+        }
+
+        function checkWin() {
+            if (pegs[2].length === numDisks) {
+                document.getElementById('win-msg').style.display = 'flex';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+}
+#canvas1 {
+    display: block;
+    background: url('background.png');
+    background-size: cover;
+    background-position: center;
+}
+.hidden {
+    display: none;
+}
