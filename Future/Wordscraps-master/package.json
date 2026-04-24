@@ -1,0 +1,16 @@
+{
+  "name": "wordscraps",
+  "private": true,
+  "main": "webpack.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zweih/wordscraps.git"
+  },
+  "author": "Zweih",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zweih/wordscraps/issues"
+  },
+  "homepage": "https://github.com/zweih/wordscraps#readme",
+  "dependencies": {}
+}

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Contra - Red Falcon Strike (Elite Edition)</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Courier New', monospace; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.8); color: white; border: 2px solid #ff4444; padding: 8px 12px; border-radius: 8px; cursor: pointer; z-index: 1500; text-decoration: none; font-size: 14px; font-weight: bold; }
+        #assets-loading { display: none; }
+        #ui-layer { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 5px; border: 1px solid #3b82f6; color: #fff; font-weight: bold; font-size: 18px; }
+        #level-title { position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; color: #ff4444; font-weight: bold; text-shadow: 4px 4px #000; display: none; z-index: 1000; text-align: center; width: 100%; }
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #0f0; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 3000; text-align: center; }
+        #rotate-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; color: white; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; text-align: center; }
+        #rotate-overlay .icon { font-size: 80px; margin-bottom: 20px; animation: rotateAnim 2s infinite; }
+        @keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+        @media screen and (orientation: portrait) { #rotate-overlay { display: flex; } }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="loading-screen">
+        <h1 style="font-size: 50px; color: #ff4444;">CONTRA</h1>
+        <p>RECRUITING BILL RIZER...</p>
+        <div id="load-progress" style="width: 200px; height: 10px; border: 2px solid #fff; margin-top: 20px;">
+            <div id="load-bar" style="width: 0%; height: 100%; background: #0f0;"></div>
+        </div>
+    </div>
+
+    <div id="rotate-overlay">
+        <div class="icon">📱🔄</div>
+        <h2>PLEASE ROTATE DEVICE</h2>
+        <p>Mission briefing requires Landscape Mode</p>
+    </div>
+
+    <div id="ui-layer">
+        <div class="stat-box">STG:<span id="stage-text">1</span></div>
+        <div class="stat-box">GUN:<span id="weapon-text">NORMAL</span></div>
+        <div class="stat-box">P1:<span id="score-text">000000</span></div>
+        <div class="stat-box">REST:<span id="lives-text">3</span></div>
+    </div>
+
+    <div id="level-title">STAGE 1<br>JUNGLE</div>
+
+    <div id="assets-loading">
+        <img src="contra_dep/sky/bg_sky.png" id="img_bg_sky">
+        <img src="contra_dep/sky/fg_sky.png" id="img_fg_sky">
+        <img src="contra_dep/platforms/p1.png" id="img_p1">
+        <img src="contra_dep/platforms/p2.png" id="img_p2">
+        <img src="contra_dep/bullet.png" id="img_bullet">
+        <!-- Full Player Set -->
+        <img src="contra_dep/player/left/0.png" id="img_p_left_0"><img src="contra_dep/player/left/1.png" id="img_p_left_1"><img src="contra_dep/player/left/2.png" id="img_p_left_2"><img src="contra_dep/player/left/3.png" id="img_p_left_3"><img src="contra_dep/player/left/4.png" id="img_p_left_4"><img src="contra_dep/player/left/5.png" id="img_p_left_5"><img src="contra_dep/player/left/6.png" id="img_p_left_6"><img src="contra_dep/player/left/7.png" id="img_p_left_7">
+        <img src="contra_dep/player/right/0.png" id="img_p_right_0"><img src="contra_dep/player/right/1.png" id="img_p_right_1"><img src="contra_dep/player/right/2.png" id="img_p_right_2"><img src="contra_dep/player/right/3.png" id="img_p_right_3"><img src="contra_dep/player/right/4.png" id="img_p_right_4"><img src="contra_dep/player/right/5.png" id="img_p_right_5"><img src="contra_dep/player/right/6.png" id="img_p_right_6"><img src="contra_dep/player/right/7.png" id="img_p_right_7">
+        <img src="contra_dep/player/left_idle/0.png" id="img_p_idle_left_0"><img src="contra_dep/player/left_idle/1.png" id="img_p_idle_left_1"><img src="contra_dep/player/left_idle/2.png" id="img_p_idle_left_2"><img src="contra_dep/player/left_idle/3.png" id="img_p_idle_left_3"><img src="contra_dep/player/left_idle/4.png" id="img_p_idle_left_4"><img src="contra_dep/player/left_idle/5.png" id="img_p_idle_left_5">
+        <img src="contra_dep/player/right_idle/0.png" id="img_p_idle_right_0"><img src="contra_dep/player/right_idle/1.png" id="img_p_idle_right_1"><img src="contra_dep/player/right_idle/2.png" id="img_p_idle_right_2"><img src="contra_dep/player/right_idle/3.png" id="img_p_idle_right_3"><img src="contra_dep/player/right_idle/4.png" id="img_p_idle_right_4"><img src="contra_dep/player/right_idle/5.png" id="img_p_idle_right_5">
+        <img src="contra_dep/player/left_jump/0.png" id="img_p_jump_left"><img src="contra_dep/player/right_jump/0.png" id="img_p_jump_right">
+        <img src="contra_dep/player/left_duck/0.png" id="img_p_duck_left"><img src="contra_dep/player/right_duck/0.png" id="img_p_duck_right">
+        <!-- Enemies -->
+        <img src="contra_dep/enemies/left/0.png" id="img_e_left_0"><img src="contra_dep/enemies/left/1.png" id="img_e_left_1"><img src="contra_dep/enemies/left/2.png" id="img_e_left_2">
+        <img src="save_earth_from_alien_dep/rhinomorph.png" id="img_boss_dragon">
+        <img src="save_earth_from_alien_dep/lobstermorph.png" id="img_boss_alien">
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+    window.onload = function() {
+        document.getElementById('load-bar').style.width = "100%";
+        setTimeout(() => {
+            document.getElementById('loading-screen').style.display = "none";
+            initPhaser();
+        }, 1500);
+    };
+
+    function initPhaser() {
+        const STAGES = [
+            { name: 'JUNGLE', bg: 0x228b22, mode: 'side', length: 5000, color: '#44ff44' },
+            { name: 'BASE 1', bg: 0x555555, mode: 'base', length: 1500, color: '#888888' },
+            { name: 'WATERFALL', bg: 0x00008b, mode: 'climb', length: 5000, color: '#4444ff' },
+            { name: 'BASE 2', bg: 0x8b0000, mode: 'base', length: 1500, color: '#ff4444' },
+            { name: 'SNOW FIELD', bg: 0xadd8e6, mode: 'side', length: 5500, color: '#ffffff' },
+            { name: 'ENERGY ZONE', bg: 0x8b4513, mode: 'side', length: 6000, color: '#ff8800' },
+            { name: 'HANGAR', bg: 0x2f4f4f, mode: 'side', length: 6500, color: '#aaaaaa' },
+            { name: 'ALIEN LAIR', bg: 0x4b0082, mode: 'side', length: 7000, color: '#ff00ff' }
+        ];
+
+        const WEAPONS = {
+            'NORMAL': { rate: 350, speed: 700, pattern: 'straight' },
+            'M': { rate: 100, speed: 800, pattern: 'straight' },
+            'S': { rate: 450, speed: 700, pattern: 'spread' },
+            'L': { rate: 250, speed: 1500, pattern: 'laser' },
+            'F': { rate: 350, speed: 600, pattern: 'fireball' }
+        };
+
+        const GAME_WIDTH = 1000;
+        const GAME_HEIGHT = 562;
+
+        const config = {
+            type: Phaser.CANVAS, width: GAME_WIDTH, height: GAME_HEIGHT,
+            parent: 'game-container', scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+            input: { activePointers: 4 },
+            physics: { default: 'arcade', arcade: { gravity: { y: 2200 }, debug: false } },
+            scene: { create: create, update: update }
+        };
+
+        const game = new Phaser.Game(config);
+        let player, cursors, platforms, water, enemies, bullets, powerups, capsules, boss, bossBullets, hazards;
+        let score = 0, currentStage = 0, lives = 3, currentWeapon = 'NORMAL';
+        let isInvincible = false, isBossFight = false, bossHealth = 0, lastFired = 0, isDucking = false;
+        let mobileControls = { left: null, right: null, up: null, down: null, fire: null };
+        let controlState = { left: false, right: false, up: false, down: false, fire: false };
+
+        function create() {
+            const addTex = (key, id) => {
+                const img = document.getElementById(id);
+                if (img) this.textures.addImage(key, img);
+            };
+            addTex('bg_sky', 'img_bg_sky'); addTex('fg_sky', 'img_fg_sky');
+            addTex('p1', 'img_p1'); addTex('p2', 'img_p2'); addTex('bullet', 'img_bullet');
+            for(let i=0; i<8; i++) { addTex(`p_left_${i}`, `img_p_left_${i}`); addTex(`p_right_${i}`, `img_p_right_${i}`); }
+            for(let i=0; i<6; i++) { addTex(`p_idle_left_${i}`, `img_p_idle_left_${i}`); addTex(`p_idle_right_${i}`, `img_p_idle_right_${i}`); }
+            addTex('p_jump_left', 'img_p_jump_left'); addTex('p_jump_right', 'img_p_jump_right');
+            addTex('p_duck_left', 'img_p_duck_left'); addTex('p_duck_right', 'img_p_duck_right');
+            for(let i=0; i<3; i++) addTex(`e_left_${i}`, `img_e_left_${i}`);
+            addTex('dragon', 'img_boss_dragon'); addTex('alien_boss', 'img_boss_alien');
+
+            this.sky1 = this.add.tileSprite(GAME_WIDTH/2, GAME_HEIGHT/2, 2000, 1200, 'bg_sky').setScrollFactor(0);
+            this.sky2 = this.add.tileSprite(GAME_WIDTH/2, GAME_HEIGHT/2 + 100, 2000, 1200, 'fg_sky').setScrollFactor(0).setAlpha(0.5);
+
+            platforms = this.physics.add.staticGroup();
+            water = this.add.group();
+            bullets = this.physics.add.group();
+            bossBullets = this.physics.add.group();
+            enemies = this.physics.add.group();
+            capsules = this.physics.add.group();
+            powerups = this.physics.add.group();
+            hazards = this.physics.add.group();
+
+            this.anims.create({ key: 'run_r', frames: [0,1,2,3,4,5,6,7].map(i => ({ key: `p_right_${i}` })), frameRate: 15, repeat: -1 });
+            this.anims.create({ key: 'run_l', frames: [0,1,2,3,4,5,6,7].map(i => ({ key: `p_left_${i}` })), frameRate: 15, repeat: -1 });
+            this.anims.create({ key: 'idle_r', frames: [0,1,2,3,4,5].map(i => ({ key: `p_idle_right_${i}` })), frameRate: 6, repeat: -1 });
+            this.anims.create({ key: 'idle_l', frames: [0,1,2,3,4,5].map(i => ({ key: `p_idle_left_${i}` })), frameRate: 6, repeat: -1 });
+            this.anims.create({ key: 'e_walk', frames: [0,1,2].map(i => ({ key: `e_left_${i}` })), frameRate: 8, repeat: -1 });
+
+            player = this.physics.add.sprite(100, 100, 'p_idle_right_0');
+            player.body.setSize(40, 55).setOffset(5, 5);
+            player.facing = 'right';
+
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(enemies, platforms);
+            this.physics.add.collider(powerups, platforms);
+            this.physics.add.overlap(bullets, enemies, (b, e) => { b.destroy(); e.destroy(); addScore(100); });
+            this.physics.add.overlap(bullets, capsules, (b, c) => { b.destroy(); spawnPowerup.call(this, c.x, c.y); c.destroy(); });
+            this.physics.add.overlap(player, enemies, handlePlayerHit, null, this);
+            this.physics.add.overlap(player, bossBullets, handlePlayerHit, null, this);
+            this.physics.add.overlap(player, powerups, collectPowerup, null, this);
+            this.physics.add.overlap(player, hazards, handlePlayerHit, null, this);
+
+            cursors = this.input.keyboard.createCursorKeys();
+            this.input.keyboard.on('keydown-SPACE', () => fireWeapon.call(this));
+
+            initStage.call(this, 0);
+            createMobileControls(this);
+        }
+
+        function initStage(index) {
+            currentStage = index; const s = STAGES[index];
+            document.getElementById('stage-text').innerText = index + 1;
+            const title = document.getElementById('level-title');
+            title.innerHTML = `STAGE ${index + 1}<br>${s.name}`;
+            title.style.display = 'block'; title.style.color = s.color;
+            this.time.delayedCall(3000, () => title.style.display = 'none');
+            this.sky1.setTint(s.bg); platforms.clear(true, true); enemies.clear(true, true); 
+            capsules.clear(true, true); hazards.clear(true, true); water.clear(true, true);
+            isBossFight = false;
+
+            const floorY = GAME_HEIGHT - 35;
+            if (s.mode === 'side' || s.mode === 'base') {
+                for(let x=0; x<s.length + 1500; x+=64) {
+                    if (index === 0 && x > 1500 && x < 2200) {
+                        let w = this.add.rectangle(x, floorY + 20, 64, 40, 0x0000ff, 0.6);
+                        this.physics.add.existing(w, true); water.add(w);
+                    } else {
+                        platforms.create(x, floorY, 'p1').refreshBody();
+                    }
+                }
+                for(let i=0; i<15; i++) {
+                    platforms.create(800 + i*700, floorY - 140, 'p2');
+                    platforms.create(1100 + i*700, floorY - 300, 'p1');
+                }
+                this.cameras.main.setBounds(0, 0, s.length + 1500, GAME_HEIGHT);
+                player.x = 100; player.y = floorY - 150;
+            } else if (s.mode === 'climb') {
+                for(let y=0; y<s.length; y+=400) { 
+                    platforms.create(300, 6000-y, 'p2'); platforms.create(700, 6000-y-200, 'p1'); 
+                }
+                platforms.create(500, 6150, 'p1').setScale(20).refreshBody();
+                this.cameras.main.setBounds(0, 0, GAME_WIDTH, 6500);
+                player.x = 500; player.y = 6000;
+            }
+            this.cameras.main.startFollow(player, true, 0.1, 0.1);
+            if(this.enemyEvent) this.enemyEvent.remove();
+            if(this.capsuleEvent) this.capsuleEvent.remove();
+            this.enemyEvent = this.time.addEvent({ delay: 2200 - (index*100), callback: spawnEnemy, callbackScope: this, loop: true });
+            this.capsuleEvent = this.time.addEvent({ delay: 10000, callback: spawnCapsule, callbackScope: this, loop: true });
+        }
+
+        function spawnEnemy() {
+            if(isBossFight) return;
+            const s = STAGES[currentStage];
+            let x = player.x + 900;
+            let y = s.mode === 'climb' ? (player.y - 650) : GAME_HEIGHT - 100;
+            let e = enemies.create(x, y, 'e_left_0');
+            e.play('e_walk'); e.setVelocityX(-180 - (currentStage*20));
+        }
+
+        function spawnCapsule() {
+            if(isBossFight) return;
+            let c = capsules.create(player.x + 950, 100 + Math.random()*250, 'bullet').setTint(0xffaa00).setScale(3);
+            c.body.setAllowGravity(false); c.setVelocityX(-140);
+        }
+
+        function spawnPowerup(x, y) {
+            const types = ['M', 'S', 'L', 'F', 'B', 'R', 'SPECIAL'];
+            const type = types[Phaser.Math.Between(0, types.length-1)];
+            let p = powerups.create(x, y, 'bullet').setTint(type === 'SPECIAL' ? 0xffffff : 0x00ff00).setScale(2.5);
+            p.type = type; p.body.setGravityY(-1500);
+            p.label = this.add.text(x, y, type === 'SPECIAL' ? '★' : type, { fontSize: '24px', fontStyle: 'bold', fill: '#fff', stroke: '#000', strokeThickness: 3 });
+        }
+
+        function collectPowerup(p, pu) {
+            if (pu.label) pu.label.destroy();
+            const type = pu.type;
+            if (type === 'SPECIAL') { enemies.children.iterate(e => { if(e) e.destroy(); }); addScore(2000); } 
+            else if (type === 'B') { isInvincible = true; player.setTint(0x00ffff); this.time.delayedCall(5000, () => { isInvincible = false; player.clearTint(); }); } 
+            else if (type === 'R') { WEAPONS[currentWeapon].rate *= 0.7; } 
+            else { currentWeapon = type; document.getElementById('weapon-text').innerText = type; }
+            pu.destroy(); addScore(500);
+        }
+
+        function fireWeapon() {
+            const wp = WEAPONS[currentWeapon] || WEAPONS['NORMAL'];
+            if (game.loop.now - lastFired < wp.rate) return;
+            lastFired = game.loop.now;
+            const x = player.x + (player.facing === 'right' ? 35 : -35), y = player.y - 12, dir = player.facing === 'right' ? 1 : -1;
+            if (wp.pattern === 'straight') createB(x, y, wp.speed * dir, 0);
+            else if (wp.pattern === 'spread') { [0, -200, 200, -400, 400].forEach(vy => createB(x, y, wp.speed * dir, vy)); }
+            else if (wp.pattern === 'laser') { createB(x, y, 1600 * dir, 0).setScale(6, 0.4); }
+            else if (wp.pattern === 'fireball') createB(x, y, wp.speed * dir, 0).isFireball = true;
+            if (isBossFight && boss) {
+                this.physics.overlap(bullets, boss, (bossObj, b) => {
+                    b.destroy(); bossHealth--; boss.setAlpha(0.5); this.time.delayedCall(50, () => boss.setAlpha(1));
+                    if(bossHealth <= 0) { boss.destroy(); stageClear.call(this); }
+                });
+            }
+        }
+
+        function createB(x, y, vx, vy) {
+            let b = bullets.create(x, y, 'bullet'); b.body.setAllowGravity(false); b.setVelocity(vx, vy); return b;
+        }
+
+        function stageClear() {
+            if(this.bossAttack) this.bossAttack.remove(); addScore(15000);
+            if (currentStage >= STAGES.length - 1) { alert("MISSION ACCOMPLISHED!"); window.location.reload(); }
+            else initStage.call(this, currentStage + 1);
+        }
+
+        function handlePlayerHit(p, e) {
+            if (isInvincible || p.alpha < 1) return;
+            let inWater = false;
+            water.children.iterate(w => { if(Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), w.getBounds())) inWater = true; });
+            if (inWater && controlState.down) return;
+            lives--; document.getElementById('lives-text').innerText = lives;
+            if (lives < 0) { alert("GAME OVER"); window.location.reload(); }
+            p.alpha = 0.5; p.setTint(0xff0000); this.time.delayedCall(2000, () => { p.alpha = 1; p.clearTint(); });
+        }
+
+        function triggerBossFight(scene) {
+            isBossFight = true; scene.enemyEvent.remove(); scene.capsuleEvent.remove(); scene.cameras.main.stopFollow();
+            bossHealth = 60 + (currentStage * 35);
+            boss = scene.physics.add.sprite(scene.cameras.main.scrollX + GAME_WIDTH - 150, 200, currentStage % 2 === 0 ? 'dragon' : 'alien_boss');
+            boss.body.setAllowGravity(false); boss.setScale(1.4);
+            scene.tweens.add({ targets: boss, y: 150, duration: 2500, yoyo: true, repeat: -1 });
+            scene.bossAttack = scene.time.addEvent({
+                delay: 1300 - (currentStage*80),
+                callback: () => {
+                    if(!boss || !boss.active) return;
+                    let b = bossBullets.create(boss.x, boss.y, 'bullet');
+                    b.setTint(0xff0000).setScale(3); scene.physics.moveToObject(b, player, 480);
+                }, loop: true
+            });
+        }
+
+        function addScore(v) { score += v; document.getElementById('score-text').innerText = score.toString().padStart(6, '0'); }
+
+        function update(time, delta) {
+            const s = STAGES[currentStage];
+            this.sky1.tilePositionX = this.cameras.main.scrollX * 0.2;
+            this.sky2.tilePositionX = this.cameras.main.scrollX * 0.4;
+            const onFloor = player.body.touching.down;
+            const downKey = (cursors.down.isDown || controlState.down);
+            if (currentWeapon === 'M' && (cursors.space.isDown || controlState.fire)) fireWeapon.call(this);
+            if (cursors.left.isDown || controlState.left) { 
+                player.setVelocityX(-350); player.facing = 'left'; if (onFloor) player.play('run_l', true); 
+            } else if (cursors.right.isDown || controlState.right) { 
+                player.setVelocityX(350); player.facing = 'right'; if (onFloor) player.play('run_r', true); 
+            } else { 
+                player.setVelocityX(0); if (onFloor) player.play(player.facing === 'right' ? 'idle_r' : 'idle_l', true); 
+            }
+            if ((cursors.up.isDown || controlState.up) && onFloor) player.setVelocityY(-1150);
+            if (!onFloor) player.setTexture(player.facing === 'right' ? 'p_jump_right' : 'p_jump_left');
+            if (downKey && onFloor) { player.setVelocityX(0); player.setTexture(player.facing === 'right' ? 'p_duck_right' : 'p_duck_left'); }
+            if (!isBossFight) {
+                if (s.mode === 'climb' && player.y < 500) triggerBossFight(this);
+                else if (s.mode !== 'climb' && player.x > s.length) triggerBossFight(this);
+            }
+            bullets.children.iterate(b => { if(b && b.isFireball) { b.y += Math.sin(time*0.03)*10; b.x += Math.cos(time*0.03)*5; } });
+            powerups.children.iterate(p => { if(p && p.label) p.label.setPosition(p.x-10, p.y-35); });
+            enemies.children.iterate(e => { if(e && e.body) { if(e.body.blocked.left || e.body.blocked.right) e.setVelocityX(e.body.velocity.x * -1); e.setFlipX(e.body.velocity.x > 0); } });
+            if(player.y > (s.mode === 'climb' ? 6500 : 700)) { player.y = 100; handlePlayerHit.call(this, player); }
+        }
+
+        function createMobileControls(scene) {
+            const h = GAME_HEIGHT, w = GAME_WIDTH;
+            const s = { fontSize: '32px', fill: '#fff', backgroundColor: 'rgba(0,0,0,0.5)', padding: {x:20, y:20} };
+            mobileControls.left = scene.add.text(40, h - 100, '⬅️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+            mobileControls.right = scene.add.text(160, h - 100, '➡️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+            mobileControls.down = scene.add.text(100, h - 190, '⬇️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+            mobileControls.up = scene.add.text(w - 140, h - 100, 'JP', s).setInteractive().setScrollFactor(0).setDepth(2000);
+            mobileControls.fire = scene.add.text(w - 270, h - 100, '🔥', s).setInteractive().setScrollFactor(0).setDepth(2000);
+            const bind = (btn, key) => {
+                btn.on('pointerdown', () => controlState[key] = true);
+                btn.on('pointerup', () => controlState[key] = false);
+                btn.on('pointerout', () => controlState[key] = false);
+            };
+            bind(mobileControls.left, 'left'); bind(mobileControls.right, 'right');
+            bind(mobileControls.down, 'down'); bind(mobileControls.up, 'up');
+            mobileControls.fire.on('pointerdown', () => { controlState.fire = true; fireWeapon.call(scene); });
+            mobileControls.fire.on('pointerup', () => controlState.fire = false);
+        }
+    }
+    </script>
+</body>
+</html>

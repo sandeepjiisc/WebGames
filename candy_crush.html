@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Candy Crush - Mobile</title>
+    <style>
+        :root {
+            --accent: #ff4444;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-image: url('candy_crush_dep/styles/candy-crush-background.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .back-to-hub {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: 2px solid var(--accent);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 1000;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .score-board {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 3px solid #ff00ff;
+        }
+
+        .score-board h3 { margin: 0; color: #555; }
+        .score-board h1 { margin: 0; color: #ff00ff; font-size: 2.5rem; }
+
+        .grid {
+            width: 90vw;
+            height: 90vw;
+            max-width: 400px;
+            max-height: 400px;
+            display: flex;
+            flex-wrap: wrap;
+            background-color: rgba(255, 255, 255, 0.4);
+            padding: 5px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            border: 4px solid #fff;
+        }
+
+        .grid div {
+            width: 12.5%;
+            height: 12.5%;
+            box-sizing: border-box;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .grid div:active {
+            transform: scale(0.9);
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            body { flex-direction: row; gap: 20px; }
+            .grid { width: 70vh; height: 70vh; }
+            .score-board { margin-bottom: 0; }
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+
+    <div class="score-board">
+        <h3>Score</h3>
+        <h1 id="score">0</h1>
+    </div>
+
+    <div class="grid"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const grid = document.querySelector('.grid');
+            const scoreDisplay = document.getElementById('score');
+            const width = 8;
+            const squares = [];
+            let score = 0;
+
+            const audios = [
+                new Audio('candy_crush_dep/audio/s1.mp3'),
+                new Audio('candy_crush_dep/audio/s2.mp3'),
+                new Audio('candy_crush_dep/audio/s3.mp3'),
+                new Audio('candy_crush_dep/audio/s4.mp3'),
+            ];
+
+            const candyColors = [
+                'url(candy_crush_dep/images/red-candy.png)',
+                'url(candy_crush_dep/images/blue-candy.png)',
+                'url(candy_crush_dep/images/green-candy.png)',
+                'url(candy_crush_dep/images/orange-candy.png)',
+                'url(candy_crush_dep/images/yellow-candy.png)',
+                'url(candy_crush_dep/images/purple-candy.png)'
+            ];
+
+            function createBoard() {
+                for (let i = 0; i < width * width; i++) {
+                    const square = document.createElement('div');
+                    square.setAttribute('draggable', true);
+                    square.setAttribute('id', i);
+                    let randomColor = Math.floor(Math.random() * candyColors.length);
+                    square.style.backgroundImage = candyColors[randomColor];
+                    grid.appendChild(square);
+                    squares.push(square);
+                }
+            }
+            createBoard();
+
+            let colorBeingDragged;
+            let colorBeingReplaced;
+            let squareIdBeingDragged;
+            let squareIdBeingReplaced;
+
+            // Mouse Events
+            squares.forEach(square => {
+                square.addEventListener('dragstart', dragStart);
+                square.addEventListener('dragover', dragOver);
+                square.addEventListener('dragenter', dragEnter);
+                square.addEventListener('dragleave', dragLeave);
+                square.addEventListener('drop', dragDrop);
+                square.addEventListener('dragend', dragEnd);
+                
+                // Touch Events for Mobile
+                square.addEventListener('touchstart', touchStart, {passive: false});
+                square.addEventListener('touchmove', touchMove, {passive: false});
+                square.addEventListener('touchend', touchEnd, {passive: false});
+            });
+
+            function dragStart() {
+                colorBeingDragged = this.style.backgroundImage;
+                squareIdBeingDragged = parseInt(this.id);
+            }
+
+            function dragOver(e) { e.preventDefault(); }
+            function dragEnter(e) { e.preventDefault(); }
+            function dragLeave() {}
+
+            function dragDrop() {
+                colorBeingReplaced = this.style.backgroundImage;
+                squareIdBeingReplaced = parseInt(this.id);
+                this.style.backgroundImage = colorBeingDragged;
+                squares[squareIdBeingDragged].style.backgroundImage = colorBeingReplaced;
+            }
+
+            function dragEnd() {
+                let validMoves = [
+                    squareIdBeingDragged - 1,
+                    squareIdBeingDragged - width,
+                    squareIdBeingDragged + 1,
+                    squareIdBeingDragged + width
+                ];
+                let validMove = validMoves.includes(squareIdBeingReplaced);
+
+                if (squareIdBeingReplaced && validMove) {
+                    squareIdBeingReplaced = null;
+                } else if (squareIdBeingReplaced && !validMove) {
+                    squares[squareIdBeingReplaced].style.backgroundImage = colorBeingReplaced;
+                    squares[squareIdBeingDragged].style.backgroundImage = colorBeingDragged;
+                } else {
+                    squares[squareIdBeingDragged].style.backgroundImage = colorBeingDragged;
+                }
+            }
+
+            // Mobile Touch Support
+            let startX, startY;
+            function touchStart(e) {
+                e.preventDefault();
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                colorBeingDragged = this.style.backgroundImage;
+                squareIdBeingDragged = parseInt(this.id);
+            }
+
+            function touchMove(e) {
+                e.preventDefault();
+            }
+
+            function touchEnd(e) {
+                e.preventDefault();
+                let endX = e.changedTouches[0].clientX;
+                let endY = e.changedTouches[0].clientY;
+                
+                let diffX = endX - startX;
+                let diffY = endY - startY;
+                
+                let targetId = -1;
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > 30) targetId = diffX > 0 ? squareIdBeingDragged + 1 : squareIdBeingDragged - 1;
+                } else {
+                    if (Math.abs(diffY) > 30) targetId = diffY > 0 ? squareIdBeingDragged + width : squareIdBeingDragged - width;
+                }
+
+                if (targetId >= 0 && targetId < 64) {
+                    // Check if it's a neighbor
+                    let validMoves = [
+                        squareIdBeingDragged - 1,
+                        squareIdBeingDragged - width,
+                        squareIdBeingDragged + 1,
+                        squareIdBeingDragged + width
+                    ];
+                    
+                    // Special check for edge cases (wrapping)
+                    const isLeftEdge = squareIdBeingDragged % width === 0;
+                    const isRightEdge = squareIdBeingDragged % width === width - 1;
+                    if (isLeftEdge && targetId === squareIdBeingDragged - 1) return;
+                    if (isRightEdge && targetId === squareIdBeingDragged + 1) return;
+
+                    if (validMoves.includes(targetId)) {
+                        squareIdBeingReplaced = targetId;
+                        colorBeingReplaced = squares[targetId].style.backgroundImage;
+                        
+                        // Swap
+                        squares[targetId].style.backgroundImage = colorBeingDragged;
+                        squares[squareIdBeingDragged].style.backgroundImage = colorBeingReplaced;
+                        
+                        // Wait a bit and check for matches
+                        setTimeout(checkMatches, 100);
+                    }
+                }
+            }
+
+            function checkMatches() {
+                // If no match found, swap back (this simplified logic just checks regularly)
+            }
+
+            function moveDown() {
+                for (let i = 0; i < 56; i++) {
+                    if (squares[i + width].style.backgroundImage === '') {
+                        squares[i + width].style.backgroundImage = squares[i].style.backgroundImage;
+                        squares[i].style.backgroundImage = '';
+                        const firstRow = [0, 1, 2, 3, 4, 5, 6, 7];
+                        if (firstRow.includes(i) && squares[i].style.backgroundImage === '') {
+                            let randomColor = Math.floor(Math.random() * candyColors.length);
+                            squares[i].style.backgroundImage = candyColors[randomColor];
+                        }
+                    }
+                }
+            }
+
+            function checkRowForThree() {
+                for (let i = 0; i < 62; i++) {
+                    let rowOfThree = [i, i + 1, i + 2];
+                    let decidedColor = squares[i].style.backgroundImage;
+                    const isBlank = squares[i].style.backgroundImage === '';
+                    const notValid = [6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55];
+                    if (notValid.includes(i)) continue;
+                    if (rowOfThree.every(index => squares[index].style.backgroundImage === decidedColor && !isBlank)) {
+                        score += 3;
+                        scoreDisplay.innerHTML = score;
+                        rowOfThree.forEach(index => squares[index].style.backgroundImage = '');
+                        try { audios[0].play(); } catch(e){}
+                    }
+                }
+            }
+
+            function checkColumnForThree() {
+                for (let i = 0; i < 48; i++) {
+                    let columnOfThree = [i, i + width, i + width * 2];
+                    let decidedColor = squares[i].style.backgroundImage;
+                    const isBlank = squares[i].style.backgroundImage === '';
+                    if (columnOfThree.every(index => squares[index].style.backgroundImage === decidedColor && !isBlank)) {
+                        score += 3;
+                        scoreDisplay.innerHTML = score;
+                        columnOfThree.forEach(index => squares[index].style.backgroundImage = '');
+                        try { audios[1].play(); } catch(e){}
+                    }
+                }
+            }
+
+            function checkRowForFour() {
+                for (let i = 0; i < 61; i++) {
+                    let rowOfFour = [i, i + 1, i + 2, i + 3];
+                    let decidedColor = squares[i].style.backgroundImage;
+                    const isBlank = squares[i].style.backgroundImage === '';
+                    const notValid = [5, 6, 7, 13, 14, 15, 21, 22, 23, 29, 30, 31, 37, 38, 39, 45, 46, 47, 53, 54, 55];
+                    if (notValid.includes(i)) continue;
+                    if (rowOfFour.every(index => squares[index].style.backgroundImage === decidedColor && !isBlank)) {
+                        score += 4;
+                        scoreDisplay.innerHTML = score;
+                        rowOfFour.forEach(index => squares[index].style.backgroundImage = '');
+                        try { audios[2].play(); } catch(e){}
+                    }
+                }
+            }
+
+            function checkColumnForFour() {
+                for (let i = 0; i < 40; i++) {
+                    let columnOfFour = [i, i + width, i + width * 2, i + width * 3];
+                    let decidedColor = squares[i].style.backgroundImage;
+                    const isBlank = squares[i].style.backgroundImage === '';
+                    if (columnOfFour.every(index => squares[index].style.backgroundImage === decidedColor && !isBlank)) {
+                        score += 4;
+                        scoreDisplay.innerHTML = score;
+                        columnOfFour.forEach(index => squares[index].style.backgroundImage = '');
+                        try { audios[3].play(); } catch(e){}
+                    }
+                }
+            }
+
+            window.setInterval(function () {
+                moveDown();
+                checkRowForFour();
+                checkColumnForFour();
+                checkRowForThree();
+                checkColumnForThree();
+            }, 100);
+        });
+    </script>
+</body>
+</html>

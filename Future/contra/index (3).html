@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contra Web</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #111;
+            font-family: 'Courier New', Courier, monospace;
+            color: white;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background-color: #000;
+            border: 4px solid #444;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .score-box {
+            position: absolute;
+            top: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 0 #000;
+        }
+        #score-1 { left: 20px; color: #ff0000; }
+        #hi-score { left: 50%; transform: translateX(-50%); color: #ffcc00; }
+        #lives { position: absolute; top: 40px; left: 20px; }
+        .life-icon {
+            display: inline-block;
+            width: 15px;
+            height: 20px;
+            background-color: #ff0000;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 60px;
+            color: #ff0000;
+            text-shadow: 4px 4px 0 #fff;
+            margin-bottom: 20px;
+            letter-spacing: 5px;
+        }
+        .blink-text {
+            font-size: 24px;
+            animation: blink 1s infinite;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .controls {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 16px;
+            color: #aaa;
+        }
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #game-over h2 {
+            font-size: 50px;
+            color: #ff0000;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <div id="ui-layer">
+        <div id="score-1" class="score-box">1P: <span id="p1-score">0000000</span></div>
+        <div id="hi-score" class="score-box">HI: 0100000</div>
+        <div id="lives">
+            <div class="life-icon"></div>
+            <div class="life-icon"></div>
+            <div class="life-icon"></div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1>CONTRA</h1>
+        <div class="blink-text" id="start-btn">PRESS ENTER TO START</div>
+        <div class="controls">
+            <p>A / D : Move Left / Right</p>
+            <p>W : Jump | S : Duck</p>
+            <p>SPACE : Fire</p>
+        </div>
+    </div>
+
+    <div id="game-over">
+        <h2>GAME OVER</h2>
+        <div class="blink-text" id="restart-btn">PRESS ENTER TO CONTINUE</div>
+    </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

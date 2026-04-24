@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Wind Bow: Archery Master</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.7); color: white; border: 2px solid #34d399; padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+        .back-to-hub:hover { background: #34d399; color: #000; }
+        #ui-layer { position: absolute; top: 15px; width: 100%; display: flex; justify-content: center; gap: 20px; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 20px; border: 2px solid #3b82f6; color: #fff; font-weight: bold; font-size: 18px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px #000; }
+        #level-title { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); font-size: 50px; color: #fff; font-weight: bold; text-shadow: 0 0 20px #3b82f6, 2px 2px 4px #000; display: none; z-index: 1000; text-align: center; width: 100%; letter-spacing: 2px; }
+        
+        #rotate-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0f172a, #1e1b4b); color: white; display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000; text-align: center;
+        }
+        #rotate-overlay .icon { font-size: 80px; margin-bottom: 20px; animation: rotateAnim 2s infinite; }
+        @keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+        @media screen and (orientation: portrait) { #rotate-overlay { display: flex; } }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Back to Hub</a>
+    
+    <div id="rotate-overlay">
+        <div class="icon">📱🔄</div>
+        <h2>ROTATE YOUR DEVICE</h2>
+        <p>Archery requires a wide field of view</p>
+    </div>
+
+    <div id="ui-layer">
+        <div class="stat-box" style="border-color: #f59e0b;">LEVEL: <span id="level-text">1</span></div>
+        <div class="stat-box" style="border-color: #10b981;">ARROWS: <span id="arrows-text">5</span></div>
+        <div class="stat-box" style="border-color: #3b82f6;">WIND: <span id="wind-text">0 mph</span></div>
+    </div>
+
+    <div id="level-title">LEVEL 1</div>
+
+    <div id="game-container"></div>
+
+    <script>
+    const LEVELS = [
+        { arrows: 5, wind: 0, targetY: 400, targetDist: 600, targetMove: 0, obs: null, desc: 'THE BASICS' },
+        { arrows: 5, wind: 100, targetY: 400, targetDist: 700, targetMove: 0, obs: null, desc: 'LIGHT BREEZE' },
+        { arrows: 5, wind: -250, targetY: 300, targetDist: 800, targetMove: 0, obs: null, desc: 'STRONG HEADWIND' },
+        { arrows: 5, wind: 50, targetY: 400, targetDist: 750, targetMove: 100, obs: null, desc: 'MOVING TARGET' },
+        { arrows: 5, wind: 0, targetY: 400, targetDist: 800, targetMove: 0, obs: {x: 500, y: 300, h: 200, move: 0}, desc: 'THE WALL' },
+        { arrows: 4, wind: 150, targetY: 500, targetDist: 850, targetMove: 0, obs: {x: 600, y: 300, h: 250, move: 100}, desc: 'MOVING BLOCKER' },
+        { arrows: 4, wind: -150, targetY: 200, targetDist: 900, targetMove: 150, obs: null, desc: 'HIGH FLIER' },
+        { arrows: 4, wind: 350, targetY: 450, targetDist: 900, targetMove: 0, obs: {x: 550, y: 500, h: 300, move: 0}, desc: 'GALE FORCE' },
+        { arrows: 3, wind: -300, targetY: 350, targetDist: 950, targetMove: 200, obs: null, desc: 'FAST & FURIOUS' },
+        { arrows: 3, wind: 400, targetY: 400, targetDist: 950, targetMove: 150, obs: {x: 600, y: 400, h: 200, move: 200}, desc: 'THE MASTER SHOT' }
+    ];
+
+    const GAME_WIDTH = 1200;
+    const GAME_HEIGHT = 675;
+
+    const config = {
+        type: Phaser.WEBGL,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+        parent: 'game-container',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        backgroundColor: '#0f172a',
+        physics: { default: 'arcade', arcade: { gravity: { y: 600 }, debug: false } },
+        scene: { preload: preload, create: create, update: update }
+    };
+
+    const game = new Phaser.Game(config);
+
+    let currentLevel = 0;
+    let arrowsLeft = 0;
+    let windForce = 0;
+    
+    let bow, arrow, target, obstacle;
+    let isAiming = false;
+    let aimStart = {x: 0, y: 0};
+    let aimCurrent = {x: 0, y: 0};
+    let trajectoryGraphics;
+    let activeArrows = [];
+    let windParticles;
+    let windTimer = 0;
+    let targetBaseY = 0;
+
+    function preload() {
+        // We will procedurally generate assets for crisp, beautiful graphics
+    }
+
+    function create() {
+        // --- Visual Environment ---
+        // Sky Gradient
+        let graphics = this.add.graphics();
+        graphics.fillGradientStyle(0x0f172a, 0x0f172a, 0x1e1b4b, 0x1e1b4b, 1);
+        graphics.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        // Sun/Moon
+        let sun = this.add.circle(GAME_WIDTH - 200, 150, 60, 0xfde047);
+        sun.setAlpha(0.8);
+        let glow = this.add.circle(GAME_WIDTH - 200, 150, 80, 0xfde047, 0.3);
+        this.tweens.add({ targets: glow, scale: 1.2, alpha: 0.1, duration: 2000, yoyo: true, repeat: -1 });
+
+        // Mountains (Parallax effect)
+        let mountains = this.add.graphics();
+        mountains.fillStyle(0x334155, 1);
+        mountains.beginPath();
+        mountains.moveTo(0, GAME_HEIGHT);
+        mountains.lineTo(0, 400);
+        mountains.lineTo(200, 250);
+        mountains.lineTo(450, 450);
+        mountains.lineTo(700, 200);
+        mountains.lineTo(1000, 400);
+        mountains.lineTo(GAME_WIDTH, 300);
+        mountains.lineTo(GAME_WIDTH, GAME_HEIGHT);
+        mountains.closePath();
+        mountains.fillPath();
+
+        // Foreground Ground
+        let ground = this.add.graphics();
+        ground.fillStyle(0x064e3b, 1);
+        ground.fillRect(0, GAME_HEIGHT - 100, GAME_WIDTH, 100);
+        
+        // --- Wind Particles (The "Character") ---
+        windParticles = this.add.particles(0, 0, 'leaf', {
+            x: { min: -200, max: GAME_WIDTH + 200 },
+            y: { min: 0, max: GAME_HEIGHT },
+            lifespan: 4000,
+            speedX: { min: 0, max: 0 }, // Will be set by wind
+            speedY: { min: -20, max: 20 },
+            scale: { start: 0.5, end: 0 },
+            alpha: { start: 0.6, end: 0 },
+            quantity: 2,
+            blendMode: 'ADD'
+        });
+        
+        // Create a simple leaf texture for particles
+        let leafGraphics = this.add.graphics();
+        leafGraphics.fillStyle(0x34d399, 1);
+        leafGraphics.fillEllipse(5, 5, 8, 4);
+        leafGraphics.generateTexture('leaf', 10, 10);
+        leafGraphics.destroy();
+
+        // --- Game Objects ---
+        trajectoryGraphics = this.add.graphics();
+
+        // Bow Base
+        this.bowBase = this.add.circle(150, GAME_HEIGHT - 150, 40, 0x000000, 0); // Invisible hit area
+
+        // Initialize Level
+        initLevel.call(this, currentLevel);
+
+        // --- Input Handling ---
+        this.input.on('pointerdown', function (pointer) {
+            if (arrowsLeft <= 0 || activeArrows.length > 0) return;
+            // Only allow aiming if clicking near the bow
+            if (Phaser.Math.Distance.Between(pointer.x, pointer.y, 150, GAME_HEIGHT - 150) < 200) {
+                isAiming = true;
+                aimStart.x = pointer.x;
+                aimStart.y = pointer.y;
+                aimCurrent.x = pointer.x;
+                aimCurrent.y = pointer.y;
+            }
+        }, this);
+
+        this.input.on('pointermove', function (pointer) {
+            if (isAiming) {
+                aimCurrent.x = pointer.x;
+                aimCurrent.y = pointer.y;
+            }
+        }, this);
+
+        this.input.on('pointerup', function (pointer) {
+            if (isAiming) {
+                isAiming = false;
+                trajectoryGraphics.clear();
+                fireArrow.call(this);
+            }
+        }, this);
+    }
+
+    function generateTargetTexture(scene) {
+        if(scene.textures.exists('target')) return;
+        let g = scene.add.graphics();
+        g.fillStyle(0xffffff, 1); g.fillCircle(25, 50, 25); // White outer
+        g.fillStyle(0xef4444, 1); g.fillCircle(25, 50, 18); // Red
+        g.fillStyle(0xffffff, 1); g.fillCircle(25, 50, 10); // White inner
+        g.fillStyle(0xef4444, 1); g.fillCircle(25, 50, 4);  // Bullseye
+        // Stand
+        g.fillStyle(0x8b4513, 1); g.fillRect(20, 75, 10, 100);
+        g.generateTexture('target', 50, 150);
+        g.destroy();
+    }
+
+    function generateArrowTexture(scene) {
+        if(scene.textures.exists('arrowTex')) return;
+        let g = scene.add.graphics();
+        g.lineStyle(2, 0xa3a3a3); g.beginPath(); g.moveTo(0, 5); g.lineTo(40, 5); g.strokePath(); // Shaft
+        g.fillStyle(0x94a3b8, 1); g.fillTriangle(40, 0, 50, 5, 40, 10); // Head
+        g.fillStyle(0xef4444, 1); g.fillRect(0, 2, 8, 2); g.fillRect(0, 6, 8, 2); // Fletching
+        g.generateTexture('arrowTex', 50, 10);
+        g.destroy();
+    }
+
+    function initLevel(levelIdx) {
+        currentLevel = levelIdx;
+        const levelData = LEVELS[levelIdx];
+        arrowsLeft = levelData.arrows;
+        windForce = levelData.wind;
+        targetBaseY = levelData.targetY;
+
+        document.getElementById('level-text').innerText = levelIdx + 1;
+        document.getElementById('arrows-text').innerText = arrowsLeft;
+        
+        let windDisplay = Math.abs(Math.round(windForce / 20));
+        let windDir = windForce > 0 ? '➡️' : (windForce < 0 ? '⬅️' : '');
+        document.getElementById('wind-text').innerText = `${windDisplay} mph ${windDir}`;
+
+        const title = document.getElementById('level-title');
+        title.innerHTML = `LEVEL ${levelIdx + 1}<br><span style="font-size:30px; color:#94a3b8;">${levelData.desc}</span>`;
+        title.style.display = 'block';
+        this.time.delayedCall(3000, () => title.style.display = 'none');
+
+        generateTargetTexture(this);
+        generateArrowTexture(this);
+
+        // Cleanup old
+        if(target) target.destroy();
+        if(obstacle) obstacle.destroy();
+        activeArrows.forEach(a => a.destroy());
+        activeArrows = [];
+
+        // Setup Target
+        target = this.physics.add.sprite(levelData.targetDist, targetBaseY, 'target');
+        target.body.setAllowGravity(false);
+        target.body.setImmovable(true);
+        // Only the bullseye part should be a valid hit area for scoring, but we'll use overlap
+        target.body.setSize(50, 50); 
+        target.body.setOffset(0, 25);
+
+        // Setup Obstacle
+        if (levelData.obs) {
+            let obsData = levelData.obs;
+            obstacle = this.add.rectangle(obsData.x, obsData.y, 30, obsData.h, 0x475569);
+            this.physics.add.existing(obstacle, true);
+            obstacle.baseY = obsData.y;
+            obstacle.moveAmt = obsData.move;
+        }
+
+        // Update Wind Particles
+        windParticles.speedX.min = windForce * 0.8;
+        windParticles.speedX.max = windForce * 1.2;
+        if(windForce === 0) windParticles.setAlpha(0);
+        else windParticles.setAlpha({ start: 0.6, end: 0 });
+    }
+
+    function drawTrajectory(scene, startX, startY, vx, vy) {
+        trajectoryGraphics.clear();
+        trajectoryGraphics.lineStyle(2, 0xffffff, 0.5);
+        trajectoryGraphics.beginPath();
+        trajectoryGraphics.moveTo(startX, startY);
+
+        let simX = startX;
+        let simY = startY;
+        let simVx = vx;
+        let simVy = vy;
+        let gravity = scene.physics.config.gravity.y;
+        let dt = 0.1; // Simulated time step
+
+        // Calculate drag based on velocity to simulate realistic arrow flight
+        const dragFactor = 0.0005;
+
+        for (let i = 0; i < 30; i++) {
+            // Apply wind to horizontal velocity
+            simVx += (windForce * 0.5) * dt; 
+            
+            // Apply air resistance
+            simVx -= simVx * Math.abs(simVx) * dragFactor * dt;
+            simVy -= simVy * Math.abs(simVy) * dragFactor * dt;
+
+            simVy += gravity * dt;
+            simX += simVx * dt;
+            simY += simVy * dt;
+            
+            if(i % 2 === 0) { // Dashed line
+                trajectoryGraphics.lineTo(simX, simY);
+            } else {
+                trajectoryGraphics.moveTo(simX, simY);
+            }
+            
+            if (simY > GAME_HEIGHT) break;
+        }
+        trajectoryGraphics.strokePath();
+    }
+
+    function fireArrow() {
+        let dx = aimStart.x - aimCurrent.x;
+        let dy = aimStart.y - aimCurrent.y;
+        
+        // Power multiplier
+        let power = Math.min(Math.sqrt(dx*dx + dy*dy) * 4, 1400); // Cap max power
+        
+        if (power < 100) return; // Too weak, cancel shot
+
+        let angle = Math.atan2(dy, dx);
+        let vx = Math.cos(angle) * power;
+        let vy = Math.sin(angle) * power;
+
+        let newArrow = this.physics.add.sprite(150, GAME_HEIGHT - 150, 'arrowTex');
+        newArrow.body.setSize(10, 10);
+        newArrow.body.setOffset(40, 0); // Put hitbox at the tip
+        newArrow.setVelocity(vx, vy);
+        newArrow.setRotation(angle);
+        newArrow.isStuck = false;
+
+        // Dynamic drag based on Phaser physics
+        newArrow.body.setDrag(0, 0); 
+        
+        activeArrows.push(newArrow);
+        arrowsLeft--;
+        document.getElementById('arrows-text').innerText = arrowsLeft;
+
+        // Collision Checks
+        this.physics.add.overlap(newArrow, target, handleHitTarget, null, this);
+        if(obstacle) this.physics.add.collider(newArrow, obstacle, handleHitObstacle, null, this);
+    }
+
+    function handleHitTarget(arrowSprite, targetSprite) {
+        if (arrowSprite.isStuck) return;
+        arrowSprite.isStuck = true;
+        arrowSprite.setVelocity(0, 0);
+        arrowSprite.body.setAllowGravity(false);
+        
+        // Calculate accuracy score based on distance to bullseye center
+        let dist = Phaser.Math.Distance.Between(arrowSprite.x + Math.cos(arrowSprite.rotation)*20, arrowSprite.y, targetSprite.x, targetSprite.y - 25);
+        
+        let scoreText = "";
+        let color = "#fff";
+        if (dist < 10) { scoreText = "BULLSEYE!"; color = "#fde047"; }
+        else if (dist < 20) { scoreText = "GREAT!"; color = "#34d399"; }
+        else if (dist < 40) { scoreText = "GOOD!"; color = "#60a5fa"; }
+        else { scoreText = "HIT!"; color = "#fff"; }
+
+        let popText = this.add.text(targetSprite.x, targetSprite.y - 80, scoreText, { fontSize: '30px', fontStyle: 'bold', fill: color, stroke: '#000', strokeThickness: 4 });
+        popText.setOrigin(0.5);
+        this.tweens.add({ targets: popText, y: popText.y - 50, alpha: 0, duration: 1500, onComplete: () => popText.destroy() });
+
+        // Win Level
+        this.time.delayedCall(1500, () => {
+            if (currentLevel >= LEVELS.length - 1) {
+                alert("YOU ARE THE ARCHERY MASTER! Game Beaten.");
+                window.location.reload();
+            } else {
+                initLevel.call(this, currentLevel + 1);
+            }
+        });
+    }
+
+    function handleHitObstacle(arrowSprite, obsSprite) {
+        if (arrowSprite.isStuck) return;
+        arrowSprite.isStuck = true;
+        arrowSprite.setVelocity(0, 0);
+        arrowSprite.body.setAllowGravity(false);
+        
+        let popText = this.add.text(arrowSprite.x, arrowSprite.y - 30, "CLUNK", { fontSize: '20px', fontStyle: 'bold', fill: '#94a3b8' });
+        this.tweens.add({ targets: popText, y: popText.y - 20, alpha: 0, duration: 1000, onComplete: () => popText.destroy() });
+    }
+
+    function update(time, delta) {
+        // --- Draw Bow ---
+        let graphics = trajectoryGraphics; // Use same graphics context for bow drawing
+        
+        // Draw Player Character (Abstract stickman/shape for elegance)
+        graphics.lineStyle(4, 0xffffff, 1);
+        graphics.beginPath();
+        graphics.moveTo(130, GAME_HEIGHT - 100); // Leg
+        graphics.lineTo(150, GAME_HEIGHT - 130); // Body
+        graphics.lineTo(150, GAME_HEIGHT - 160); // Neck
+        graphics.strokePath();
+        graphics.fillStyle(0xffffff, 1);
+        graphics.fillCircle(150, GAME_HEIGHT - 170, 10); // Head
+
+        // Arms and Bow
+        let bowX = 150;
+        let bowY = GAME_HEIGHT - 150;
+
+        if (isAiming) {
+            let dx = aimStart.x - aimCurrent.x;
+            let dy = aimStart.y - aimCurrent.y;
+            
+            // Limit pullback visual
+            let pullDist = Math.min(Math.sqrt(dx*dx + dy*dy), 100);
+            let angle = Math.atan2(dy, dx);
+            
+            // Draw Trajectory Prediction
+            let power = Math.min(Math.sqrt(dx*dx + dy*dy) * 4, 1400);
+            if (power > 100) {
+                drawTrajectory(this, bowX, bowY, Math.cos(angle) * power, Math.sin(angle) * power);
+            }
+
+            // Draw Bow
+            graphics.lineStyle(4, 0xf59e0b, 1); // Bow wood
+            graphics.beginPath();
+            graphics.arc(bowX, bowY, 40, angle - Math.PI/2.5, angle + Math.PI/2.5);
+            graphics.strokePath();
+
+            // Draw String
+            let stringX = bowX - Math.cos(angle) * pullDist;
+            let stringY = bowY - Math.sin(angle) * pullDist;
+            let topBowX = bowX + Math.cos(angle - Math.PI/2.5) * 40;
+            let topBowY = bowY + Math.sin(angle - Math.PI/2.5) * 40;
+            let botBowX = bowX + Math.cos(angle + Math.PI/2.5) * 40;
+            let botBowY = bowY + Math.sin(angle + Math.PI/2.5) * 40;
+
+            graphics.lineStyle(1, 0xffffff, 0.8);
+            graphics.beginPath();
+            graphics.moveTo(topBowX, topBowY);
+            graphics.lineTo(stringX, stringY);
+            graphics.lineTo(botBowX, botBowY);
+            graphics.strokePath();
+
+            // Draw Arrow loaded
+            graphics.lineStyle(2, 0xa3a3a3, 1);
+            graphics.beginPath();
+            graphics.moveTo(stringX, stringY);
+            graphics.lineTo(stringX + Math.cos(angle)*50, stringY + Math.sin(angle)*50);
+            graphics.strokePath();
+
+        } else {
+            // Idle Bow
+            graphics.lineStyle(4, 0xf59e0b, 1);
+            graphics.beginPath();
+            graphics.arc(bowX, bowY, 40, -Math.PI/2.5, Math.PI/2.5);
+            graphics.strokePath();
+            graphics.lineStyle(1, 0xffffff, 0.8);
+            graphics.beginPath();
+            graphics.moveTo(bowX + Math.cos(-Math.PI/2.5)*40, bowY + Math.sin(-Math.PI/2.5)*40);
+            graphics.lineTo(bowX + Math.cos(Math.PI/2.5)*40, bowY + Math.sin(Math.PI/2.5)*40);
+            graphics.strokePath();
+        }
+
+        // --- Arrow Physics Updates ---
+        activeArrows.forEach(a => {
+            if (!a.isStuck) {
+                // Apply wind force to horizontal velocity
+                // The longer it's in the air, the more the wind pushes it
+                a.body.velocity.x += (windForce * 1.5) * (delta / 1000);
+                
+                // Air drag
+                const dragFactor = 0.0005;
+                a.body.velocity.x -= a.body.velocity.x * Math.abs(a.body.velocity.x) * dragFactor * (delta / 1000);
+                a.body.velocity.y -= a.body.velocity.y * Math.abs(a.body.velocity.y) * dragFactor * (delta / 1000);
+
+                // Update rotation to match velocity trajectory
+                a.setRotation(Math.atan2(a.body.velocity.y, a.body.velocity.x));
+
+                // Ground/Off-screen collision
+                if (a.y > GAME_HEIGHT - 100 || a.x > GAME_WIDTH + 200 || a.x < -200) {
+                    a.isStuck = true;
+                    a.setVelocity(0, 0);
+                    a.body.setAllowGravity(false);
+                    checkFailure.call(this);
+                }
+            } else if (a.y > GAME_HEIGHT - 100) {
+                // If it stuck in the ground, fade it out
+                a.alpha -= 0.01;
+                if(a.alpha <= 0) {
+                    a.destroy();
+                    activeArrows = activeArrows.filter(arr => arr !== a);
+                }
+            }
+        });
+
+        // --- Moving Targets & Obstacles ---
+        const levelData = LEVELS[currentLevel];
+        if (target && levelData.targetMove > 0) {
+            target.y = targetBaseY + Math.sin(time * 0.002) * levelData.targetMove;
+        }
+        if (obstacle && levelData.obs.move > 0) {
+            obstacle.y = obstacle.baseY + Math.cos(time * 0.0025) * levelData.obs.move;
+            obstacle.body.updateFromGameObject();
+        }
+    }
+
+    function checkFailure() {
+        if (arrowsLeft <= 0) {
+            // Check if any arrow is still flying
+            let allStuck = activeArrows.every(a => a.isStuck);
+            if (allStuck) {
+                let txt = this.add.text(GAME_WIDTH/2, GAME_HEIGHT/2, "OUT OF ARROWS\nTRY AGAIN", { fontSize: '40px', fontStyle: 'bold', fill: '#ef4444', align: 'center', stroke: '#000', strokeThickness: 4 });
+                txt.setOrigin(0.5);
+                this.time.delayedCall(2000, () => {
+                    txt.destroy();
+                    initLevel.call(this, currentLevel); // Restart level
+                });
+            }
+        }
+    }
+    </script>
+</body>
+</html>
