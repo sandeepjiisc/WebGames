@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Jewel Coloring: Sort & Paint</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: radial-gradient(circle at bottom, #4c1d95, #0f172a); overflow: hidden; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        
+        .back-to-hub { position: absolute; top: 15px; left: 15px; background: rgba(255, 255, 255, 0.1); color: white; border: 2px solid rgba(255,255,255,0.5); padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-size: 14px; font-weight: bold; transition: all 0.3s; backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .back-to-hub:hover { background: rgba(255,255,255,0.3); border-color: #fff; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,255,255,0.2); }
+        
+        #ui-layer { position: absolute; top: 15px; right: 15px; text-align: right; z-index: 500; pointer-events: none; }
+        .stat { font-size: 24px; font-weight: bold; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); background: rgba(0,0,0,0.3); padding: 8px 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.15); backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .stat span { color: #fbcfe8; text-shadow: 0 0 10px #f472b6; }
+        
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1500; backdrop-filter: blur(10px); text-align: center; }
+        .overlay h1 { font-size: 70px; margin: 0 0 15px 0; color: #fff; text-shadow: 0 0 20px #c084fc, 0 0 40px #c084fc, 0 0 60px #c084fc; letter-spacing: 2px; }
+        .overlay p { font-size: 26px; margin: 0 0 40px 0; line-height: 1.5; max-width: 650px; color: #e2e8f0; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .overlay button { padding: 18px 50px; font-size: 26px; font-weight: bold; cursor: pointer; background: linear-gradient(135deg, #a855f7, #ec4899); border: none; color: white; border-radius: 40px; box-shadow: 0 8px 0 #7e22ce, 0 15px 20px rgba(0,0,0,0.4); text-transform: uppercase; transition: all 0.15s; letter-spacing: 1px; }
+        .overlay button:active { transform: translateY(8px); box-shadow: 0 0 0 #7e22ce, 0 5px 10px rgba(0,0,0,0.4); }
+
+        #level-win h1 { color: #fff; text-shadow: 0 0 20px #34d399, 0 0 40px #34d399, 0 0 60px #34d399; }
+        #level-win button { background: linear-gradient(135deg, #34d399, #10b981); box-shadow: 0 8px 0 #059669, 0 15px 20px rgba(0,0,0,0.4); }
+        #level-win button:active { box-shadow: 0 0 0 #059669, 0 5px 10px rgba(0,0,0,0.4); }
+        
+        .reset-btn { position: absolute; bottom: 25px; right: 25px; padding: 12px 24px; font-size: 18px; font-weight: bold; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.5); color: white; border-radius: 15px; z-index: 100; cursor: pointer; backdrop-filter: blur(10px); transition: all 0.2s; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .reset-btn:hover { background: rgba(255,255,255,0.25); border-color: #fff; transform: translateY(-2px); }
+        .reset-btn:active { transform: translateY(2px); }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="ui-layer">
+        <div class="stat">LEVEL: <span id="level-text">1</span></div>
+    </div>
+    
+    <button class="reset-btn" onclick="restartLevel()">🔄 Restart Level</button>
+
+    <div id="start-screen" class="overlay" style="display: flex;">
+        <h1 style="font-size: 50px; line-height: 1.1; margin-bottom: 20px;">JEWEL COLORING<br><span style="font-size: 30px; color: #fbcfe8; text-shadow: 0 0 10px #f472b6;">Sparkle & Create with Pixel Art Puzzles</span></h1>
+        <p style="font-size: 20px; margin-bottom: 20px;">Enter a vibrant world of glowing jewels where creativity and puzzle-solving come together in perfect harmony! Designed for easy, relaxing fun, this one-of-a-kind experience combines color sorting, pixel art creation, and satisfying casual gameplay all in one.</p>
+        <p style="font-size: 20px; margin-bottom: 30px; color: #a78bfa; font-weight: bold;">How to Play: Color, Sort, & Craft Beautiful Pixel Art!</p>
+        <button onclick="startGame()">PLAY NOW</button>
+    </div>
+
+    <div id="level-win" class="overlay">
+        <h1>MASTERPIECE!</h1>
+        <p>You revealed the artwork!</p>
+        <button onclick="nextLevel()">NEXT LEVEL</button>
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+        const GAME_WIDTH = 720;
+        const GAME_HEIGHT = 1080;
+        
+        const PALETTE = {
+            1: { color: 0xff3333, name: 'Red' },
+            2: { color: 0x33cc33, name: 'Green' },
+            3: { color: 0x3366ff, name: 'Blue' },
+            4: { color: 0xffff33, name: 'Yellow' },
+            5: { color: 0xff33ff, name: 'Purple' },
+            6: { color: 0x33ffff, name: 'Cyan' },
+            7: { color: 0xff8800, name: 'Orange' },
+            8: { color: 0x8b4513, name: 'Brown' },
+            9: { color: 0xffffff, name: 'White' },
+            10: { color: 0xaaaaaa, name: 'Grey' },
+            11: { color: 0xffb6c1, name: 'Pink' }
+        };
+
+        const LEVELS = [
+            {
+                // Level 1: Apple
+                grid: [
+                    [0,0,0,0,2,0,0,0],
+                    [0,0,0,0,8,0,0,0],
+                    [0,0,1,1,1,1,0,0],
+                    [0,1,1,1,1,1,1,0],
+                    [0,1,1,1,1,1,1,0],
+                    [0,1,1,1,1,1,1,0],
+                    [0,0,1,1,1,1,0,0],
+                    [0,0,0,1,1,0,0,0]
+                ]
+            },
+            {
+                // Level 2: Sword
+                grid: [
+                    [0,0,0,0,0,0,0,10],
+                    [0,0,0,0,0,0,10,10],
+                    [0,0,0,0,0,10,10,0],
+                    [0,0,0,0,10,10,0,0],
+                    [0,0,0,10,10,0,0,0],
+                    [0,4,4,10,4,4,0,0],
+                    [0,0,4,3,4,0,0,0],
+                    [0,0,0,8,0,0,0,0]
+                ]
+            },
+            {
+                // Level 3: Duck
+                grid: [
+                    [0,0,4,4,4,0,0,0],
+                    [0,4,4,9,4,0,0,0],
+                    [7,7,4,4,4,0,0,0],
+                    [0,0,4,4,4,4,0,0],
+                    [0,4,4,4,4,4,4,0],
+                    [0,4,4,4,4,4,4,0],
+                    [3,3,3,3,3,3,3,3],
+                    [0,3,3,3,3,3,3,0]
+                ]
+            },
+            {
+                // Level 4: House
+                grid: [
+                    [0,0,0,0,1,0,0,0],
+                    [0,0,0,1,1,1,0,0],
+                    [0,0,1,1,1,1,1,0],
+                    [0,1,1,1,1,1,1,1],
+                    [0,0,9,9,9,9,0,0],
+                    [0,0,9,3,3,9,0,0],
+                    [0,0,9,9,9,9,0,0],
+                    [0,0,8,8,8,8,0,0]
+                ]
+            },
+            {
+                // Level 5: Heart
+                grid: [
+                    [0,1,1,0,0,1,1,0],
+                    [1,11,11,1,1,11,11,1],
+                    [1,11,11,11,11,11,11,1],
+                    [1,11,11,11,11,11,11,1],
+                    [0,1,11,11,11,11,1,0],
+                    [0,0,1,11,11,1,0,0],
+                    [0,0,0,1,1,0,0,0],
+                    [0,0,0,0,1,0,0,0]
+                ]
+            },
+            {
+                // Level 6: Crown
+                grid: [
+                    [4,0,4,0,4,0,4,0],
+                    [4,4,4,4,4,4,4,0],
+                    [4,1,4,3,4,2,4,0],
+                    [4,4,4,4,4,4,4,0],
+                    [4,4,4,4,4,4,4,0],
+                    [0,4,5,5,5,4,0,0],
+                    [0,4,4,4,4,4,0,0],
+                    [0,0,0,0,0,0,0,0]
+                ]
+            }
+        ];
+
+        const config = {
+            type: Phaser.WEBGL,
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+            parent: 'game-container',
+            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+            backgroundColor: '#1a1a2e',
+            scene: { preload: preload, create: create }
+        };
+
+        let game;
+        window.onload = function() { game = new Phaser.Game(config); };
+
+        let levelIdx = 0;
+        let gameState = 'start';
+        let pixels = [];
+        let tubes = [];
+        let selectedTube = null;
+        let activeColors = [];
+        let completedColors = new Set();
+        let particles;
+        let currentScene = null;
+
+        function preload() {
+            // Preload empty, dynamic generation moved to create
+        }
+
+        function create() {
+            currentScene = this;
+
+            // Generate Jewel Texture
+            let g = this.add.graphics();
+            g.fillStyle(0xffffff, 1);
+            g.beginPath();
+            g.moveTo(30, 5);
+            g.lineTo(55, 30);
+            g.lineTo(30, 55);
+            g.lineTo(5, 30);
+            g.closePath();
+            g.fillPath();
+            g.generateTexture('jewel_base', 60, 60);
+            
+            // Tube texture
+            g.clear();
+            g.lineStyle(6, 0x94a3b8, 1);
+            g.beginPath();
+            g.moveTo(0, 0); g.lineTo(0, 200);
+            g.arc(35, 200, 35, Math.PI, 0, true);
+            g.lineTo(70, 0);
+            g.strokePath();
+            g.fillStyle(0xffffff, 0.1);
+            g.fillRect(0, 0, 70, 200);
+            g.generateTexture('tube', 70, 240);
+            g.clear();
+            
+            // Pixel texture
+            g.fillStyle(0xffffff, 1);
+            g.fillRect(0, 0, 40, 40);
+            g.lineStyle(2, 0x000000, 0.5);
+            g.strokeRect(0, 0, 40, 40);
+            g.generateTexture('pixel', 40, 40);
+            g.clear();
+
+            // Particle
+            g.fillStyle(0xffffff, 1);
+            g.fillCircle(10, 10, 10);
+            g.generateTexture('particle', 20, 20);
+            g.clear();
+
+            // Setup Particles
+            particles = this.add.particles(0, 0, 'particle', {
+                speed: { min: 100, max: 300 },
+                scale: { start: 0.5, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 800,
+                blendMode: 'ADD',
+                emitting: false
+            });
+            particles.setDepth(100);
+        }
+
+        window.startGame = function() {
+            if (!currentScene) {
+                setTimeout(window.startGame, 100); // Wait for scene to boot
+                return;
+            }
+            document.getElementById('start-screen').style.display = 'none';
+            levelIdx = 0;
+            initLevel(currentScene);
+        }
+
+        window.nextLevel = function() {
+            document.getElementById('level-win').style.display = 'none';
+            levelIdx++;
+            if (levelIdx >= LEVELS.length) levelIdx = 0; // Loop levels
+            initLevel(currentScene);
+        }
+
+        window.restartLevel = function() {
+            if (gameState === 'animating' || !currentScene) return;
+            document.getElementById('level-win').style.display = 'none';
+            initLevel(currentScene);
+        }
+
+        function initLevel(scene) {
+            gameState = 'playing';
+            document.getElementById('level-text').innerText = levelIdx + 1;
+            selectedTube = null;
+            completedColors.clear();
+
+            // Clean up old
+            pixels.forEach(p => p.bg.destroy() || (p.text && p.text.destroy()));
+            pixels = [];
+            tubes.forEach(t => {
+                t.sprite.destroy();
+                t.jewels.forEach(j => j.destroy());
+                if (t.selGfx) t.selGfx.destroy();
+            });
+            tubes = [];
+
+            let levelData = LEVELS[levelIdx];
+            
+            // Analyze colors
+            let colorSet = new Set();
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    let val = levelData.grid[r][c];
+                    if (val > 0) colorSet.add(val);
+                }
+            }
+            activeColors = Array.from(colorSet);
+
+            // Draw Pixel Art Grid (Top Area)
+            let startX = (GAME_WIDTH - (8 * 40)) / 2 + 20;
+            let startY = 150;
+
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    let val = levelData.grid[r][c];
+                    if (val > 0) {
+                        let bg = scene.add.sprite(startX + c*40, startY + r*40, 'pixel');
+                        bg.setTint(0x333344); // Dark empty slot
+                        
+                        let text = scene.add.text(startX + c*40, startY + r*40, val.toString(), {
+                            fontSize: '20px', fill: '#94a3b8', fontStyle: 'bold'
+                        }).setOrigin(0.5);
+
+                        pixels.push({
+                            r: r, c: c, val: val,
+                            bg: bg, text: text,
+                            isColored: false,
+                            targetX: startX + c*40,
+                            targetY: startY + r*40
+                        });
+                    }
+                }
+            }
+
+            // Prepare Jewels for Tubes
+            // Each color gets exactly 4 jewels
+            let jewelPool = [];
+            activeColors.forEach(colorVal => {
+                for(let i=0; i<4; i++) jewelPool.push(colorVal);
+            });
+            // Shuffle
+            Phaser.Utils.Array.Shuffle(jewelPool);
+
+            // Create Tubes
+            let numTubes = activeColors.length + 2; // +2 empty tubes
+            let tubesPerRow = Math.min(numTubes, 5);
+            let tubeWidth = 70;
+            let tubeSpacing = 20;
+            
+            for(let i=0; i<numTubes; i++) {
+                let row = Math.floor(i / 5);
+                let col = i % 5;
+                let totalInRow = Math.min(numTubes - row*5, 5);
+                let rowWidth = (totalInRow * tubeWidth) + ((totalInRow - 1) * tubeSpacing);
+                let tX = (GAME_WIDTH - rowWidth) / 2 + (col * (tubeWidth + tubeSpacing)) + (tubeWidth/2);
+                let tY = 600 + (row * 280);
+
+                let sprite = scene.add.sprite(tX, tY, 'tube').setInteractive();
+                
+                // Selection Highlight
+                let selGfx = scene.add.graphics();
+                selGfx.lineStyle(4, 0xfacc15, 1);
+                selGfx.strokeRoundedRect(tX - 45, tY - 130, 90, 260, 20);
+                selGfx.setAlpha(0);
+
+                let tubeObj = {
+                    id: i,
+                    x: tX, y: tY,
+                    sprite: sprite,
+                    selGfx: selGfx,
+                    jewels: []
+                };
+
+                // Add jewels from pool (up to 4)
+                for(let j=0; j<4; j++) {
+                    if (jewelPool.length > 0 && i < activeColors.length) {
+                        let colorVal = jewelPool.pop();
+                        addJewelToTube(scene, tubeObj, colorVal, false);
+                    }
+                }
+
+                sprite.on('pointerdown', () => handleTubeClick(scene, tubeObj));
+                tubes.push(tubeObj);
+            }
+        }
+
+        function addJewelToTube(scene, tube, colorVal, animate) {
+            let slotIdx = tube.jewels.length; // 0 is bottom, 3 is top
+            let jX = tube.x;
+            let jY = tube.y + 80 - (slotIdx * 45); // Bottom up
+
+            let jewel = scene.add.sprite(jX, animate ? jY - 100 : jY, 'jewel_base');
+            jewel.setTint(PALETTE[colorVal].color);
+            jewel.colorVal = colorVal;
+            
+            // Add number text to jewel
+            let text = scene.add.text(jX, animate ? jY - 100 : jY, colorVal.toString(), {
+                fontSize: '24px', fill: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 4
+            }).setOrigin(0.5);
+            
+            jewel.numText = text;
+            tube.jewels.push(jewel);
+
+            if (animate) {
+                gameState = 'animating';
+                scene.tweens.add({
+                    targets: [jewel, text],
+                    y: jY,
+                    duration: 150,
+                    ease: 'Power2',
+                    onComplete: () => {
+                        gameState = 'playing';
+                        checkTubeCompletion(scene, tube);
+                    }
+                });
+            }
+        }
+
+        function handleTubeClick(scene, tube) {
+            if (gameState !== 'playing') return;
+
+            if (selectedTube === null) {
+                // Select tube if it has jewels
+                if (tube.jewels.length > 0) {
+                    selectedTube = tube;
+                    tube.selGfx.setAlpha(1);
+                    
+                    // Pop top jewel up slightly
+                    let topJewel = tube.jewels[tube.jewels.length - 1];
+                    scene.tweens.add({ targets: [topJewel, topJewel.numText], y: topJewel.y - 30, duration: 100 });
+                }
+            } else {
+                // Clicking same tube deselects
+                if (selectedTube.id === tube.id) {
+                    let topJewel = tube.jewels[tube.jewels.length - 1];
+                    scene.tweens.add({ targets: [topJewel, topJewel.numText], y: topJewel.y + 30, duration: 100 });
+                    tube.selGfx.setAlpha(0);
+                    selectedTube = null;
+                    return;
+                }
+
+                // Try to move jewel
+                if (tube.jewels.length < 4) {
+                    let topJewelMove = selectedTube.jewels[selectedTube.jewels.length - 1];
+                    
+                    // Valid if target is empty, or top jewel matches color
+                    let targetTop = tube.jewels.length > 0 ? tube.jewels[tube.jewels.length - 1] : null;
+                    
+                    if (!targetTop || targetTop.colorVal === topJewelMove.colorVal) {
+                        // VALID MOVE
+                        moveJewel(scene, selectedTube, tube);
+                    } else {
+                        // Invalid Move - wiggle
+                        scene.tweens.add({
+                            targets: tube.sprite,
+                            x: tube.sprite.x + 10,
+                            yoyo: true,
+                            repeat: 2,
+                            duration: 50
+                        });
+                        
+                        // Deselect
+                        scene.tweens.add({ targets: [topJewelMove, topJewelMove.numText], y: topJewelMove.y + 30, duration: 100 });
+                        selectedTube.selGfx.setAlpha(0);
+                        selectedTube = null;
+                    }
+                } else {
+                    // Tube full - deselect
+                    let topJewelMove = selectedTube.jewels[selectedTube.jewels.length - 1];
+                    scene.tweens.add({ targets: [topJewelMove, topJewelMove.numText], y: topJewelMove.y + 30, duration: 100 });
+                    selectedTube.selGfx.setAlpha(0);
+                    selectedTube = null;
+                }
+            }
+        }
+
+        function moveJewel(scene, fromTube, toTube) {
+            gameState = 'animating';
+            fromTube.selGfx.setAlpha(0);
+            
+            // How many matching jewels can we move? (Water sort style - move stack)
+            let moveCount = 1;
+            let topColor = fromTube.jewels[fromTube.jewels.length - 1].colorVal;
+            
+            for(let i = fromTube.jewels.length - 2; i >= 0; i--) {
+                if (fromTube.jewels[i].colorVal === topColor && toTube.jewels.length + moveCount < 4) {
+                    moveCount++;
+                } else {
+                    break;
+                }
+            }
+
+            let moved = 0;
+            for(let i=0; i<moveCount; i++) {
+                let jewel = fromTube.jewels.pop();
+                let text = jewel.numText;
+                
+                let slotIdx = toTube.jewels.length;
+                let tX = toTube.x;
+                let tY = toTube.y + 80 - (slotIdx * 45);
+                toTube.jewels.push(jewel); // Add immediately logically
+                
+                scene.tweens.add({
+                    targets: [jewel, text],
+                    x: tX,
+                    y: { value: tY - 150, duration: 150 }, // up
+                    onComplete: () => {
+                        scene.tweens.add({
+                            targets: [jewel, text],
+                            y: tY, // down
+                            duration: 150,
+                            ease: 'Bounce.easeOut',
+                            onComplete: () => {
+                                moved++;
+                                if (moved === moveCount) {
+                                    gameState = 'playing';
+                                    checkTubeCompletion(scene, toTube);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+            selectedTube = null;
+        }
+
+        function checkTubeCompletion(scene, tube) {
+            if (tube.jewels.length === 4) {
+                let allSame = true;
+                let cVal = tube.jewels[0].colorVal;
+                for(let i=1; i<4; i++) {
+                    if (tube.jewels[i].colorVal !== cVal) allSame = false;
+                }
+
+                if (allSame && !completedColors.has(cVal)) {
+                    // TUBE COMPLETE!
+                    gameState = 'animating';
+                    completedColors.add(cVal);
+                    
+                    // Fly jewels to canvas
+                    let matchingPixels = pixels.filter(p => p.val === cVal);
+                    let jewelsToFly = [...tube.jewels];
+                    tube.jewels = []; // Empty tube
+                    
+                    // Particles explode from tube
+                    particles.particleTint = PALETTE[cVal].color;
+                    particles.emitParticleAt(tube.x, tube.y, 20);
+
+                    // Fly to canvas
+                    scene.time.delayedCall(300, () => {
+                        jewelsToFly.forEach((j, idx) => {
+                            scene.tweens.add({
+                                targets: [j, j.numText],
+                                y: j.y - 200,
+                                alpha: 0,
+                                scale: 0.5,
+                                duration: 500,
+                                onComplete: () => {
+                                    j.numText.destroy();
+                                    j.destroy();
+                                }
+                            });
+                        });
+
+                        // Color the pixels
+                        let delay = 0;
+                        matchingPixels.forEach(p => {
+                            scene.time.delayedCall(400 + delay, () => {
+                                p.bg.setTint(PALETTE[cVal].color);
+                                p.text.destroy(); // Remove number
+                                p.isColored = true;
+                                
+                                // Pop animation
+                                scene.tweens.add({
+                                    targets: p.bg,
+                                    scale: 1.2,
+                                    yoyo: true,
+                                    duration: 100
+                                });
+                            });
+                            delay += 50;
+                        });
+
+                        // Check Win
+                        scene.time.delayedCall(500 + delay, () => {
+                            gameState = 'playing';
+                            if (completedColors.size === activeColors.length) {
+                                // Level Win
+                                gameState = 'animating';
+                                document.getElementById('level-win').style.display = 'flex';
+                                // Confetti
+                                particles.particleTint = 0xffffff;
+                                particles.emitParticleAt(GAME_WIDTH/2, GAME_HEIGHT/2, 100);
+                            }
+                        });
+                    });
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>

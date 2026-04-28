@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D Bubble Shoot</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #2a2a4a, #101020); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; touch-action: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        .back-to-hub { position: absolute; top: 15px; left: 15px; background: rgba(0, 0, 0, 0.6); color: white; border: 2px solid #fff; padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-weight: bold; backdrop-filter: blur(5px); }
+        .back-to-hub:hover { background: #fff; color: #000; }
+        
+        #ui-layer { position: absolute; top: 15px; right: 15px; text-align: right; z-index: 500; pointer-events: none; }
+        .stat { font-size: 24px; font-weight: bold; margin-bottom: 5px; text-shadow: 0 2px 4px rgba(0,0,0,0.8); background: rgba(0,0,0,0.4); padding: 5px 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); }
+        .stat span { color: #facc15; }
+        
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1500; backdrop-filter: blur(5px); text-align: center; }
+        .overlay h1 { font-size: 60px; margin: 0 0 10px 0; color: #facc15; text-shadow: 0 0 20px rgba(250, 204, 21, 0.5); }
+        .overlay p { font-size: 24px; margin: 0 0 30px 0; line-height: 1.4; }
+        .overlay button { padding: 15px 40px; font-size: 24px; font-weight: bold; cursor: pointer; background: #e11d48; border: none; color: white; border-radius: 30px; box-shadow: 0 6px 0 #be123c; text-transform: uppercase; transition: transform 0.1s, box-shadow 0.1s; }
+        .overlay button:active { transform: translateY(6px); box-shadow: 0 0 0 #be123c; }
+
+        #level-win h1 { color: #2ed573; text-shadow: 0 0 20px rgba(46, 213, 115, 0.5); }
+        #level-win button { background: #2ed573; box-shadow: 0 6px 0 #20bf6b; }
+        #level-win button:active { box-shadow: 0 0 0 #20bf6b; }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="ui-layer">
+        <div class="stat">SCORE: <span id="score-text">0</span></div>
+        <div class="stat">LEVEL: <span id="level-text">1</span></div>
+        <div class="stat">DROP IN: <span id="drop-counter">6</span></div>
+    </div>
+
+    <div id="start-screen" class="overlay" style="display: flex;">
+        <h1>3D BUBBLE TOWER</h1>
+        <p>Swipe to rotate the tower.<br>Tap to shoot and match 3+ bubbles!<br>Don't let them cross the red line!</p>
+        <button onclick="startGame()">PLAY NOW</button>
+    </div>
+
+    <div id="game-over" class="overlay">
+        <h1 style="color: #ff4757;">GAME OVER</h1>
+        <p>The bubbles reached the bottom!<br>Score: <span id="final-score">0</span></p>
+        <button onclick="startGame()">TRY AGAIN</button>
+    </div>
+
+    <div id="level-win" class="overlay">
+        <h1>LEVEL CLEAR!</h1>
+        <p>Awesome job!</p>
+        <button onclick="nextLevel()">NEXT LEVEL</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // Game Constants & State
+        const COLS = 16;
+        const MAX_ROWS = 40;
+        const R = 1.2;
+        const CYL_R = R / Math.sin(Math.PI / COLS);
+        const dH = R * Math.sqrt(3);
+        const dA = (Math.PI * 2) / COLS;
+        const COLORS = [0xff4757, 0x1e90ff, 0x2ed573, 0xfacc15, 0x9c88ff, 0xffa502];
+
+        let gameState = 'start';
+        let score = 0;
+        let level = 1;
+        let shotsUntilDrop = 6;
+        let anchorRow = 0;
+        let lowestY = 0;
+        let lowestR = 0;
+
+        let scene, camera, renderer;
+        let cylinderGroup;
+        let grid = [];
+        let currentBubble = null;
+        let nextBubbleMesh = null;
+        let nextBubbleColor = 0;
+        let fallingBubbles = [];
+        let materials = [];
+        let sphereGeo;
+
+        // Input vars
+        let isDragging = false;
+        let startX = 0;
+        let startRot = 0;
+        let dragDist = 0;
+        let lastX = 0;
+
+        let clock;
+        let aimLine;
+
+        init();
+
+        function init() {
+            clock = new THREE.Clock();
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x101020, 0.015);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+            camera.position.set(0, 0, CYL_R + 18);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 30, 50);
+            scene.add(dirLight);
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            fillLight.position.set(-20, -10, -50);
+            scene.add(fillLight);
+
+            // Aim Line
+            const aimMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.5, gapSize: 0.5, transparent: true, opacity: 0.5 });
+            const aimGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0, 40, 0)]);
+            aimLine = new THREE.Line(aimGeo, aimMat);
+            aimLine.computeLineDistances();
+            scene.add(aimLine);
+
+            cylinderGroup = new THREE.Group();
+            scene.add(cylinderGroup);
+
+            // Core Cylinder
+            const coreGeo = new THREE.CylinderGeometry(CYL_R - R * 0.8, CYL_R - R * 0.8, MAX_ROWS * dH, 32);
+            coreGeo.translate(0, -MAX_ROWS * dH / 2, 0);
+            const coreMat = new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.7 });
+            const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            cylinderGroup.add(coreMesh);
+
+            // Danger Line
+            const lineGeo = new THREE.TorusGeometry(CYL_R, 0.15, 8, 64);
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const dangerLine = new THREE.Mesh(lineGeo, lineMat);
+            dangerLine.position.y = -30 * dH;
+            dangerLine.rotation.x = Math.PI / 2;
+            cylinderGroup.add(dangerLine);
+
+            sphereGeo = new THREE.SphereGeometry(R, 32, 32);
+            materials = COLORS.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.1, metalness: 0.2 }));
+
+            for (let r = 0; r < MAX_ROWS; r++) {
+                grid.push(new Array(COLS).fill(null));
+            }
+
+            // Input handling
+            const getX = (e) => e.clientX !== undefined ? e.clientX : (e.touches && e.touches.length > 0 ? e.touches[0].clientX : 0);
+
+            renderer.domElement.addEventListener('pointerdown', e => {
+                if (gameState !== 'playing') return;
+                isDragging = true;
+                startX = getX(e);
+                lastX = startX;
+                startRot = cylinderGroup.rotation.y;
+                dragDist = 0;
+            });
+
+            renderer.domElement.addEventListener('pointermove', e => {
+                if (!isDragging) return;
+                let cx = getX(e);
+                let dx = cx - startX;
+                dragDist += Math.abs(cx - lastX);
+                lastX = cx;
+                cylinderGroup.rotation.y = startRot + dx * 0.008;
+            });
+
+            renderer.domElement.addEventListener('pointerup', e => {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                if (dragDist < 10 && currentBubble && !currentBubble.isShooting) {
+                    currentBubble.isShooting = true;
+                    shotsUntilDrop--;
+                    document.getElementById('drop-counter').innerText = shotsUntilDrop;
+                }
+            });
+
+            renderer.domElement.addEventListener('touchstart', e => {
+                if (gameState !== 'playing') return;
+                isDragging = true;
+                startX = getX(e);
+                lastX = startX;
+                startRot = cylinderGroup.rotation.y;
+                dragDist = 0;
+            }, {passive: true});
+
+            renderer.domElement.addEventListener('touchmove', e => {
+                if (!isDragging) return;
+                let cx = getX(e);
+                let dx = cx - startX;
+                dragDist += Math.abs(cx - lastX);
+                lastX = cx;
+                cylinderGroup.rotation.y = startRot + dx * 0.008;
+            }, {passive: true});
+
+            renderer.domElement.addEventListener('touchend', e => {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                if (dragDist < 10 && currentBubble && !currentBubble.isShooting) {
+                    currentBubble.isShooting = true;
+                    shotsUntilDrop--;
+                    document.getElementById('drop-counter').innerText = shotsUntilDrop;
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
+        }
+
+        function getGridLocalPos(r, c) {
+            let angle = c * dA + (r % 2 !== 0 ? dA / 2 : 0);
+            let y = -r * dH;
+            let x = CYL_R * Math.sin(angle);
+            let z = CYL_R * Math.cos(angle);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        window.startGame = function() {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-over').style.display = 'none';
+            score = 0;
+            level = 1;
+            buildLevel();
+            gameState = 'playing';
+            document.getElementById('score-text').innerText = score;
+        }
+
+        window.nextLevel = function() {
+            document.getElementById('level-win').style.display = 'none';
+            level++;
+            buildLevel();
+            gameState = 'playing';
+        }
+
+        function buildLevel() {
+            anchorRow = 0;
+            shotsUntilDrop = 6;
+            document.getElementById('level-text').innerText = level;
+            document.getElementById('drop-counter').innerText = shotsUntilDrop;
+            
+            // Clear existing
+            for(let r=0; r<MAX_ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if (grid[r][c]) {
+                        cylinderGroup.remove(grid[r][c]);
+                        grid[r][c] = null;
+                    }
+                }
+            }
+            for (let b of fallingBubbles) scene.remove(b);
+            fallingBubbles = [];
+            
+            if (currentBubble) { scene.remove(currentBubble); currentBubble = null; }
+            if (nextBubbleMesh) { scene.remove(nextBubbleMesh); nextBubbleMesh = null; }
+            
+            let numRows = Math.min(5 + level * 2, 15); // Grow level length
+            let numColors = Math.min(3 + Math.floor((level - 1) / 2), 6);
+            
+            for (let r = 0; r < numRows; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (Math.random() < 0.85 || r < 3) {
+                        let colorIdx = Math.floor(Math.random() * numColors);
+                        let mesh = new THREE.Mesh(sphereGeo, materials[colorIdx]);
+                        mesh.position.copy(getGridLocalPos(r, c));
+                        mesh.colorIdx = colorIdx;
+                        mesh.r = r;
+                        mesh.c = c;
+                        grid[r][c] = mesh;
+                        cylinderGroup.add(mesh);
+                    }
+                }
+            }
+            
+            // Instantly clean up floating bubbles before play begins
+            doCleanFloatingBubblesSilent();
+            updateLowestY();
+            
+            // Fast forward camera to ensure perfectly framed view
+            camera.position.y = lowestY - 6;
+            
+            nextBubbleColor = Math.floor(Math.random() * numColors);
+            spawnNextBubble();
+        }
+
+        function doCleanFloatingBubblesSilent() {
+            let attached = new Set();
+            let queue = [];
+            for (let c = 0; c < COLS; c++) {
+                if (grid[anchorRow][c]) {
+                    attached.add(`${anchorRow},${c}`);
+                    queue.push({r: anchorRow, c: c});
+                }
+            }
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                let neighbors = getNeighbors(curr.r, curr.c);
+                for (let n of neighbors) {
+                    if (grid[n.r][n.c] && !attached.has(`${n.r},${n.c}`)) {
+                        attached.add(`${n.r},${n.c}`);
+                        queue.push(n);
+                    }
+                }
+            }
+            for (let r = anchorRow + 1; r < MAX_ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] && !attached.has(`${r},${c}`)) {
+                        cylinderGroup.remove(grid[r][c]);
+                        grid[r][c] = null;
+                    }
+                }
+            }
+        }
+
+        function updateLowestY() {
+            lowestR = anchorRow;
+            for (let r = MAX_ROWS - 1; r >= anchorRow; r--) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c]) {
+                        lowestR = r;
+                        lowestY = -r * dH;
+                        return;
+                    }
+                }
+            }
+            lowestY = -anchorRow * dH;
+        }
+
+        function spawnNextBubble() {
+            let colorIdx = nextBubbleColor;
+            let numColors = Math.min(3 + Math.floor((level - 1) / 2), 6);
+            nextBubbleColor = Math.floor(Math.random() * numColors);
+            
+            currentBubble = new THREE.Mesh(sphereGeo, materials[colorIdx]);
+            currentBubble.colorIdx = colorIdx;
+            currentBubble.isShooting = false;
+            // Position set dynamically in update loop
+            scene.add(currentBubble);
+            
+            if (!nextBubbleMesh) {
+                nextBubbleMesh = new THREE.Mesh(sphereGeo, materials[nextBubbleColor]);
+                nextBubbleMesh.scale.set(0.6, 0.6, 0.6);
+                scene.add(nextBubbleMesh);
+            } else {
+                nextBubbleMesh.material = materials[nextBubbleColor];
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            let delta = clock.getDelta();
+            if (delta > 0.1) delta = 0.1;
+            
+            if (gameState === 'playing') {
+                // Camera logic: Center perfectly between lowest bubble and cannon
+                let targetCamPos = lowestY - 6;
+                if (targetCamPos < -30 * dH - 5) targetCamPos = -30 * dH - 5;
+                camera.position.y += (targetCamPos - camera.position.y) * 5 * delta;
+
+                // Cannon sits just inside the bottom visible edge of screen
+                let cannonY = camera.position.y - 8;
+
+                if (currentBubble && !currentBubble.isShooting) {
+                    currentBubble.position.set(0, cannonY, CYL_R + R * 0.5);
+                }
+                if (nextBubbleMesh) {
+                    nextBubbleMesh.position.set(3, cannonY - 2, CYL_R);
+                }
+
+                // Physics
+                if (currentBubble && currentBubble.isShooting) {
+                    currentBubble.position.y += 60 * delta;
+                    
+                    let hit = false;
+                    let shotPos = currentBubble.position;
+                    
+                    let approxRow = Math.round(-shotPos.y / dH);
+                    let minR = Math.max(0, approxRow - 3);
+                    let maxR = Math.min(MAX_ROWS - 1, approxRow + 3);
+                    
+                    for (let r = minR; r <= maxR; r++) {
+                        for (let c = 0; c < COLS; c++) {
+                            let b = grid[r][c];
+                            if (b) {
+                                let bWorld = new THREE.Vector3();
+                                b.getWorldPosition(bWorld);
+                                if (bWorld.distanceTo(shotPos) < R * 1.85) {
+                                    hit = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (hit) break;
+                    }
+                    
+                    if (hit || shotPos.y > -anchorRow * dH + 5) {
+                        snapBubble();
+                    }
+                }
+
+                // Falling
+                for (let i = fallingBubbles.length - 1; i >= 0; i--) {
+                    let b = fallingBubbles[i];
+                    b.position.y += b.vy * delta;
+                    b.vy -= 100 * delta;
+                    if (b.position.y < camera.position.y - 50) {
+                        scene.remove(b);
+                        fallingBubbles.splice(i, 1);
+                    }
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        function snapBubble() {
+            currentBubble.isShooting = false;
+            let localPos = cylinderGroup.worldToLocal(currentBubble.position.clone());
+            
+            let bestDist = Infinity;
+            let bestCell = null;
+
+            let approxRow = Math.round(-localPos.y / dH);
+            let minR = Math.max(0, approxRow - 3);
+            let maxR = Math.min(MAX_ROWS - 1, approxRow + 3);
+
+            for (let r = minR; r <= maxR; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (!grid[r][c]) {
+                        let p = getGridLocalPos(r, c);
+                        let dist = p.distanceTo(localPos);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestCell = {r, c};
+                        }
+                    }
+                }
+            }
+            
+            if (bestCell) {
+                currentBubble.position.copy(getGridLocalPos(bestCell.r, bestCell.c));
+                currentBubble.r = bestCell.r;
+                currentBubble.c = bestCell.c;
+                grid[bestCell.r][bestCell.c] = currentBubble;
+                cylinderGroup.add(currentBubble); 
+                
+                checkMatches(bestCell.r, bestCell.c);
+            } else {
+                gameOver(); // Grid completely full
+            }
+        }
+
+        function getNeighbors(r, c) {
+            let neighbors = [];
+            let left = (c - 1 + COLS) % COLS;
+            let right = (c + 1) % COLS;
+            
+            neighbors.push({r: r, c: left});
+            neighbors.push({r: r, c: right});
+            
+            if (r > 0) {
+                if (r % 2 === 0) {
+                    neighbors.push({r: r-1, c: left});
+                    neighbors.push({r: r-1, c: c});
+                } else {
+                    neighbors.push({r: r-1, c: c});
+                    neighbors.push({r: r-1, c: right});
+                }
+            }
+            
+            if (r < MAX_ROWS - 1) {
+                if (r % 2 === 0) {
+                    neighbors.push({r: r+1, c: left});
+                    neighbors.push({r: r+1, c: c});
+                } else {
+                    neighbors.push({r: r+1, c: c});
+                    neighbors.push({r: r+1, c: right});
+                }
+            }
+            return neighbors;
+        }
+
+        function checkMatches(r, c) {
+            let startB = grid[r][c];
+            let color = startB.colorIdx;
+            let matchSet = new Set();
+            let queue = [{r, c}];
+            matchSet.add(`${r},${c}`);
+            
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                let neighbors = getNeighbors(curr.r, curr.c);
+                for (let n of neighbors) {
+                    if (grid[n.r][n.c] && grid[n.r][n.c].colorIdx === color) {
+                        let key = `${n.r},${n.c}`;
+                        if (!matchSet.has(key)) {
+                            matchSet.add(key);
+                            queue.push(n);
+                        }
+                    }
+                }
+            }
+            
+            if (matchSet.size >= 3) {
+                matchSet.forEach(key => {
+                    let [rr, cc] = key.split(',').map(Number);
+                    dropBubble(rr, cc);
+                });
+                score += matchSet.size * 10;
+                document.getElementById('score-text').innerText = score;
+                
+                checkFloatingBubbles();
+            } else {
+                finalizeTurn();
+            }
+        }
+
+        function dropBubble(r, c) {
+            let b = grid[r][c];
+            if (!b) return;
+            grid[r][c] = null;
+            
+            let worldPos = new THREE.Vector3();
+            b.getWorldPosition(worldPos);
+            scene.add(b);
+            b.position.copy(worldPos);
+            b.vy = 0;
+            fallingBubbles.push(b);
+        }
+
+        function checkFloatingBubbles() {
+            let attached = new Set();
+            let queue = [];
+            
+            for (let c = 0; c < COLS; c++) {
+                if (grid[anchorRow][c]) {
+                    attached.add(`${anchorRow},${c}`);
+                    queue.push({r: anchorRow, c: c});
+                }
+            }
+            
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                let neighbors = getNeighbors(curr.r, curr.c);
+                for (let n of neighbors) {
+                    if (grid[n.r][n.c]) {
+                        let key = `${n.r},${n.c}`;
+                        if (!attached.has(key)) {
+                            attached.add(key);
+                            queue.push(n);
+                        }
+                    }
+                }
+            }
+            
+            let dropped = 0;
+            for (let r = anchorRow + 1; r < MAX_ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] && !attached.has(`${r},${c}`)) {
+                        dropBubble(r, c);
+                        dropped++;
+                    }
+                }
+            }
+            
+            score += dropped * 20;
+            document.getElementById('score-text').innerText = score;
+            
+            finalizeTurn();
+        }
+
+        function shiftDown() {
+            for (let r = MAX_ROWS - 2; r >= anchorRow; r--) {
+                for (let c = 0; c < COLS; c++) {
+                    let b = grid[r][c];
+                    if (b) {
+                        grid[r+1][c] = b;
+                        grid[r][c] = null;
+                        b.r = r+1;
+                        b.position.copy(getGridLocalPos(r+1, c));
+                    }
+                }
+            }
+            anchorRow++;
+            updateLowestY();
+            if (lowestR >= 30) {
+                gameOver();
+            }
+        }
+
+        function finalizeTurn() {
+            updateLowestY();
+            
+            let count = 0;
+            for (let r = anchorRow; r <= lowestR; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c]) count++;
+                }
+            }
+            if (count === 0) {
+                levelWin();
+                return;
+            }
+            
+            if (lowestR >= 30) {
+                gameOver();
+                return;
+            }
+            
+            if (shotsUntilDrop <= 0) {
+                shotsUntilDrop = 6;
+                shiftDown();
+            }
+            document.getElementById('drop-counter').innerText = shotsUntilDrop;
+            
+            if (gameState === 'playing') spawnNextBubble();
+        }
+
+        function levelWin() {
+            gameState = 'levelwin';
+            document.getElementById('level-win').style.display = 'flex';
+            currentBubble = null;
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('game-over').style.display = 'flex';
+            currentBubble = null;
+        }
+
+    </script>
+</body>
+</html>

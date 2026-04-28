@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neon Pac-Man</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', sans-serif; color: white; display: flex; flex-direction: column; height: 100vh; width: 100vw; justify-content: center; align-items: center; box-sizing: border-box; padding-top: 50px; padding-bottom: 10px; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.8); color: white; border: 2px solid #eab308; padding: 8px 12px; border-radius: 8px; cursor: pointer; z-index: 1000; text-decoration: none; font-weight: bold; }
+        #ui-layer { position: absolute; top: 10px; right: 10px; display: flex; gap: 15px; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 2px solid #eab308; font-weight: bold; font-size: 18px; }
+        
+        #game-over {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000; text-align: center;
+        }
+        #game-over h2 { color: #eab308; font-size: 50px; margin: 0 0 10px 0; text-shadow: 2px 2px 0 #000; }
+        #game-over p { font-size: 24px; color: #fff; margin: 0 0 30px 0; }
+        #game-over button { padding: 15px 30px; font-size: 20px; font-weight: bold; cursor: pointer; background: #2563eb; border: none; color: white; border-radius: 10px; box-shadow: 0 5px 0 #1d4ed8; }
+        #game-over button:active { transform: translateY(5px); box-shadow: 0 0 0 #1d4ed8; }
+
+        #game-container { width: 100%; height: 100%; flex-grow: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        canvas { max-width: 100% !important; max-height: 100% !important; object-fit: contain; }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none; width: 100%; height: 220px; flex-shrink: 0;
+            justify-content: center; align-items: center; z-index: 100; pointer-events: none;
+            padding-bottom: 10px; box-sizing: border-box;
+        }
+        .d-pad { display: grid; grid-template-columns: 70px 70px 70px; grid-template-rows: 70px 70px; gap: 5px; pointer-events: auto;}
+        .m-btn { background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5); border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 30px; user-select: none; }
+        .m-btn:active { background: rgba(255,255,255,0.4); }
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
+        @media (min-width: 801px) {
+            #game-container { max-height: 750px; max-width: 700px; }
+            canvas { border-radius: 10px; border: 4px solid #1d4ed8; box-shadow: 0 0 30px rgba(29, 78, 216, 0.4); }
+        }
+
+        @media (max-width: 800px) { 
+            #mobile-controls { display: flex; } 
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="ui-layer">
+        <div class="stat-box">SCORE: <span id="score-text">0</span></div>
+        <div class="stat-box">LIVES: <span id="lives-text">3</span></div>
+    </div>
+
+    <div id="game-over">
+        <h2 id="go-title">GAME OVER</h2>
+        <p>Score: <span id="go-score">0</span></p>
+        <button onclick="resetGame()">PLAY AGAIN</button>
+    </div>
+
+    <div id="game-container"></div>
+    <div id="mobile-controls">
+        <div class="d-pad">
+            <div class="m-btn" id="btn-up">⬆️</div>
+            <div class="m-btn" id="btn-left">⬅️</div>
+            <div class="m-btn" id="btn-down">⬇️</div>
+            <div class="m-btn" id="btn-right">➡️</div>
+        </div>
+    </div>
+
+    <script>
+    const TILE = 24;
+    const COLS = 21;
+    const ROWS = 22;
+    const GAME_WIDTH = COLS * TILE; // 504
+    const GAME_HEIGHT = ROWS * TILE; // 528
+    const SPEED = 110;
+
+    // 0 = empty, 1 = wall, 2 = dot, 3 = power, 4 = door
+    const INITIAL_MAP = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+        [1,3,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,3,1],
+        [1,2,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,2,1,1,1,2,1,2,1,1,1,1,1,2,1,2,1,1,1,2,1],
+        [1,2,2,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,2,2,1],
+        [1,1,1,1,1,2,1,1,1,0,1,0,1,1,1,2,1,1,1,1,1],
+        [0,0,0,0,1,2,1,0,0,0,0,0,0,0,1,2,1,0,0,0,0],
+        [1,1,1,1,1,2,1,0,1,1,4,1,1,0,1,2,1,1,1,1,1],
+        [0,0,0,0,0,2,0,0,1,0,0,0,1,0,0,2,0,0,0,0,0],
+        [1,1,1,1,1,2,1,0,1,1,1,1,1,0,1,2,1,1,1,1,1],
+        [0,0,0,0,1,2,1,0,0,0,0,0,0,0,1,2,1,0,0,0,0],
+        [1,1,1,1,1,2,1,2,1,1,1,1,1,2,1,2,1,1,1,1,1],
+        [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+        [1,2,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,2,1],
+        [1,3,2,2,1,2,2,2,2,2,0,2,2,2,2,2,1,2,2,3,1],
+        [1,1,1,2,1,2,1,2,1,1,1,1,1,2,1,2,1,2,1,1,1],
+        [1,2,2,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,2,2,1],
+        [1,2,1,1,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,2,1],
+        [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ];
+    let mapData = [];
+
+    const config = {
+        type: Phaser.WEBGL, width: GAME_WIDTH, height: GAME_HEIGHT, parent: 'game-container',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        scene: { create: create, update: update }
+    };
+
+    const game = new Phaser.Game(config);
+
+    let player, ghosts = [], dots;
+    let score = 0, lives = 3, totalDots = 0;
+    let nextDir = {x: 0, y: 0};
+    let currentDir = {x: 0, y: 0};
+    let frightenedTimer = 0;
+    let isGameOver = false;
+
+    function create() {
+        generateTextures(this);
+
+        this.anims.create({ key: 'chomp', frames: [ { key: 'pac_open' }, { key: 'pac_closed' } ], frameRate: 15, repeat: -1 });
+
+        dots = this.add.group();
+        drawLevel.call(this);
+
+        player = this.add.sprite(10 * TILE + TILE/2, 16 * TILE + TILE/2, 'pac_open').setDepth(10);
+        player.play('chomp');
+
+        initGhosts.call(this);
+
+        // Input
+        this.input.keyboard.on('keydown', e => {
+            if(e.code === 'ArrowUp' || e.code === 'KeyW') nextDir = {x:0, y:-1};
+            else if(e.code === 'ArrowDown' || e.code === 'KeyS') nextDir = {x:0, y:1};
+            else if(e.code === 'ArrowLeft' || e.code === 'KeyA') nextDir = {x:-1, y:0};
+            else if(e.code === 'ArrowRight' || e.code === 'KeyD') nextDir = {x:1, y:0};
+        });
+
+        // Swipe
+        this.input.on('pointerdown', p => { this.swipeX = p.x; this.swipeY = p.y; });
+        this.input.on('pointerup', p => {
+            let dx = p.x - this.swipeX; let dy = p.y - this.swipeY;
+            if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+                if (Math.abs(dx) > Math.abs(dy)) nextDir = {x: dx > 0 ? 1 : -1, y: 0};
+                else nextDir = {x: 0, y: dy > 0 ? 1 : -1};
+            }
+        });
+
+        // Mobile Buttons
+        const bindM = (id, nx, ny) => {
+            const btn = document.getElementById(id);
+            if(!btn) return;
+            const h = (e) => { e.preventDefault(); nextDir = {x:nx, y:ny}; };
+            btn.addEventListener('touchstart', h, {passive: false}); btn.addEventListener('mousedown', h);
+        };
+        bindM('btn-up', 0, -1); bindM('btn-down', 0, 1); bindM('btn-left', -1, 0); bindM('btn-right', 1, 0);
+    }
+
+    function generateTextures(scene) {
+        let g = scene.add.graphics();
+        // Wall
+        g.lineStyle(2, 0x1d4ed8, 1); g.fillStyle(0x0f172a, 1); g.fillRect(0,0,24,24); g.strokeRect(1,1,22,22); g.strokeRect(6,6,12,12);
+        g.generateTexture('wall', 24, 24); g.clear();
+        // Door
+        g.fillStyle(0xffb8ff, 0.5); g.fillRect(0,8,24,8); g.generateTexture('door', 24, 24); g.clear();
+        // Dot
+        g.fillStyle(0xffffff, 1); g.fillCircle(12, 12, 3); g.generateTexture('dot', 24, 24); g.clear();
+        // Power
+        g.fillStyle(0xfca5a5, 1); g.fillCircle(12, 12, 8); g.generateTexture('power', 24, 24); g.clear();
+
+        // Pacman
+        g.fillStyle(0xfacc15, 1); g.slice(12, 12, 10, Phaser.Math.DegToRad(30), Phaser.Math.DegToRad(330), false); g.fillPath(); g.generateTexture('pac_open', 24, 24); g.clear();
+        g.fillStyle(0xfacc15, 1); g.slice(12, 12, 10, Phaser.Math.DegToRad(5), Phaser.Math.DegToRad(355), false); g.fillPath(); g.generateTexture('pac_closed', 24, 24); g.clear();
+
+        // Ghosts
+        const drawGhost = (color, key) => {
+            g.fillStyle(color, 1); g.beginPath(); g.arc(12, 12, 10, Math.PI, 0); g.lineTo(22, 24); g.lineTo(19, 20); g.lineTo(16, 24); g.lineTo(12, 20); g.lineTo(8, 24); g.lineTo(5, 20); g.lineTo(2, 24); g.closePath(); g.fillPath();
+            g.fillStyle(0xffffff, 1); g.fillEllipse(8, 10, 4, 6); g.fillEllipse(16, 10, 4, 6);
+            g.fillStyle(0x1d4ed8, 1); g.fillCircle(8, 10, 1.5); g.fillCircle(16, 10, 1.5);
+            g.generateTexture(key, 24, 24); g.clear();
+        };
+        drawGhost(0xef4444, 'ghost_red'); drawGhost(0xf472b6, 'ghost_pink'); drawGhost(0x06b6d4, 'ghost_cyan'); drawGhost(0xf97316, 'ghost_orange');
+        
+        // Scared
+        g.fillStyle(0x1d4ed8, 1); g.beginPath(); g.arc(12, 12, 10, Math.PI, 0); g.lineTo(22, 24); g.lineTo(19, 20); g.lineTo(16, 24); g.lineTo(12, 20); g.lineTo(8, 24); g.lineTo(5, 20); g.lineTo(2, 24); g.closePath(); g.fillPath();
+        g.fillStyle(0xfacc15, 1); g.fillRect(6, 8, 3, 3); g.fillRect(15, 8, 3, 3); g.fillRect(4, 16, 16, 2);
+        g.generateTexture('ghost_scared', 24, 24); g.clear();
+
+        // Scared White
+        g.fillStyle(0xffffff, 1); g.beginPath(); g.arc(12, 12, 10, Math.PI, 0); g.lineTo(22, 24); g.lineTo(19, 20); g.lineTo(16, 24); g.lineTo(12, 20); g.lineTo(8, 24); g.lineTo(5, 20); g.lineTo(2, 24); g.closePath(); g.fillPath();
+        g.fillStyle(0xef4444, 1); g.fillRect(6, 8, 3, 3); g.fillRect(15, 8, 3, 3); g.fillRect(4, 16, 16, 2);
+        g.generateTexture('ghost_scared_white', 24, 24); g.clear();
+    }
+
+    function drawLevel() {
+        mapData = JSON.parse(JSON.stringify(INITIAL_MAP));
+        totalDots = 0;
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                let v = mapData[y][x];
+                let px = x * TILE + TILE/2; let py = y * TILE + TILE/2;
+                if (v === 1) this.add.image(px, py, 'wall');
+                else if (v === 4) this.add.image(px, py, 'door');
+                else if (v === 2 || v === 3) {
+                    let d = this.add.image(px, py, v === 2 ? 'dot' : 'power');
+                    d.cx = x; d.cy = y; dots.add(d);
+                    if (v === 3) this.tweens.add({ targets: d, alpha: 0.2, duration: 300, yoyo: true, repeat: -1 });
+                    totalDots++;
+                }
+            }
+        }
+    }
+
+    function initGhosts() {
+        const createG = (x, y, tex, dir) => {
+            let g = this.add.sprite(x * TILE + TILE/2, y * TILE + TILE/2, tex).setDepth(15);
+            g.baseTex = tex; g.dir = dir; g.state = 'normal'; g.frightened = false;
+            g.lastDecisionTile = {x: -1, y: -1};
+            ghosts.push(g);
+        };
+        createG(10, 8, 'ghost_red', {x:-1, y:0});
+        createG(10, 10, 'ghost_pink', {x:0, y:-1});
+        createG(9, 10, 'ghost_cyan', {x:1, y:0});
+        createG(11, 10, 'ghost_orange', {x:-1, y:0});
+    }
+
+    function triggerFrightened() {
+        ghosts.forEach(g => {
+            if(g.state !== 'eaten') {
+                g.frightened = true; g.setTexture('ghost_scared');
+                g.dir = {x: -g.dir.x, y: -g.dir.y}; // Reverse
+            }
+        });
+        frightenedTimer = 6000;
+    }
+
+    function updateScore(v) {
+        score += v; document.getElementById('score-text').innerText = score;
+    }
+
+    function die() {
+        lives--; document.getElementById('lives-text').innerText = lives;
+        if(lives <= 0) {
+            isGameOver = true;
+            document.getElementById('go-title').innerText = "GAME OVER";
+            document.getElementById('go-title').style.color = "#ef4444";
+            document.getElementById('go-score').innerText = score;
+            document.getElementById('game-over').style.display = "flex";
+        } else {
+            // Reset positions
+            player.x = 10 * TILE + TILE/2; player.y = 16 * TILE + TILE/2;
+            currentDir = {x:0, y:0}; nextDir = {x:0, y:0};
+            ghosts.forEach((g, i) => {
+                g.x = [10, 10, 9, 11][i] * TILE + TILE/2;
+                g.y = [8, 10, 10, 10][i] * TILE + TILE/2;
+                g.dir = [{x:-1,y:0}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}][i];
+                g.state = 'normal'; g.frightened = false; g.setTexture(g.baseTex);
+                g.lastDecisionTile = {x: -1, y: -1};
+            });
+            frightenedTimer = 0;
+        }
+    }
+
+    function checkWin() {
+        if(totalDots <= 0) {
+            isGameOver = true;
+            document.getElementById('go-title').innerText = "YOU WIN!";
+            document.getElementById('go-title').style.color = "#22c55e";
+            document.getElementById('go-score').innerText = score;
+            document.getElementById('game-over').style.display = "flex";
+        }
+    }
+
+    window.resetGame = () => { window.location.reload(); };
+
+    function update(time, delta) {
+        if (isGameOver) return;
+        if (delta > 50) delta = 50; // Cap delta to prevent tunneling on lag spikes
+
+        let moveDist = SPEED * (delta/1000);
+
+        // Player Movement
+        let cx = Math.floor(player.x / TILE); let cy = Math.floor(player.y / TILE);
+        let targetPx = cx * TILE + TILE/2; let targetPy = cy * TILE + TILE/2;
+        
+        if (nextDir.x !== 0 || nextDir.y !== 0) {
+            if (nextDir.x === -currentDir.x && nextDir.y === -currentDir.y) {
+                currentDir = {x: nextDir.x, y: nextDir.y}; nextDir = {x:0, y:0};
+            } else {
+                let dx = Math.abs(player.x - targetPx); let dy = Math.abs(player.y - targetPy);
+                if (dx <= moveDist && dy <= moveDist) {
+                    let nx = cx + nextDir.x; let ny = cy + nextDir.y;
+                    if (mapData[ny] && mapData[ny][nx] !== 1 && mapData[ny][nx] !== 4) {
+                        player.x = targetPx; player.y = targetPy;
+                        currentDir = {x: nextDir.x, y: nextDir.y}; nextDir = {x:0, y:0};
+                    }
+                }
+            }
+        }
+
+        let moving = true;
+        if (currentDir.x === 0 && currentDir.y === 0) moving = false;
+        
+        let pdx = player.x - targetPx; let pdy = player.y - targetPy;
+        if (currentDir.x > 0 && pdx >= 0 && mapData[cy][cx+1] === 1) moving = false;
+        if (currentDir.x < 0 && pdx <= 0 && mapData[cy][cx-1] === 1) moving = false;
+        if (currentDir.y > 0 && pdy >= 0 && mapData[cy+1] && mapData[cy+1][cx] === 1) moving = false;
+        if (currentDir.y < 0 && pdy <= 0 && mapData[cy-1] && mapData[cy-1][cx] === 1) moving = false;
+        if (currentDir.y < 0 && pdy <= 0 && mapData[cy-1] && mapData[cy-1][cx] === 4) moving = false; // Door
+
+        if (moving) {
+            player.x += currentDir.x * moveDist;
+            player.y += currentDir.y * moveDist;
+            if (currentDir.x > 0) player.setAngle(0); else if (currentDir.x < 0) player.setAngle(180); else if (currentDir.y > 0) player.setAngle(90); else if (currentDir.y < 0) player.setAngle(270);
+            player.anims.resume();
+        } else {
+            player.x = targetPx; player.y = targetPy;
+            player.anims.pause();
+        }
+        
+        if (player.x < -TILE/2) player.x = COLS * TILE + TILE/2;
+        if (player.x > COLS * TILE + TILE/2) player.x = -TILE/2;
+
+        // Collect
+        if (mapData[cy] && (mapData[cy][cx] === 2 || mapData[cy][cx] === 3)) {
+            if (mapData[cy][cx] === 3) { triggerFrightened(); updateScore(50); } else updateScore(10);
+            mapData[cy][cx] = 0; totalDots--;
+            dots.getChildren().forEach(d => { if (d.cx === cx && d.cy === cy) d.destroy(); });
+            checkWin();
+        }
+
+        // Frightened Timer
+        if (frightenedTimer > 0) {
+            frightenedTimer -= delta;
+            if (frightenedTimer <= 0) { ghosts.forEach(g => { if(g.state !== 'eaten') { g.frightened = false; g.setTexture(g.baseTex); }}); } 
+            else if (frightenedTimer < 2000) {
+                if (Math.floor(frightenedTimer / 200) % 2 === 0) ghosts.forEach(g => { if(g.frightened) g.setTexture('ghost_scared_white'); });
+                else ghosts.forEach(g => { if(g.frightened) g.setTexture('ghost_scared'); });
+            }
+        }
+
+        // Ghosts Movement
+        ghosts.forEach(g => {
+            let gcx = Math.floor(g.x / TILE); let gcy = Math.floor(g.y / TILE);
+            let targetGx = gcx * TILE + TILE/2; let targetGy = gcy * TILE + TILE/2;
+            let gSpeed = g.state === 'eaten' ? SPEED * 2.0 : (g.frightened ? SPEED * 0.5 : SPEED * 0.95);
+            let gMoveDist = gSpeed * (delta/1000);
+            
+            let distToCenter = Math.abs(g.x - targetGx) + Math.abs(g.y - targetGy);
+
+            if (distToCenter <= gMoveDist && (g.lastDecisionTile.x !== gcx || g.lastDecisionTile.y !== gcy)) {
+                g.lastDecisionTile = {x: gcx, y: gcy};
+                g.x = targetGx; g.y = targetGy;
+                
+                if (g.state === 'eaten' && gcx === 10 && gcy === 10) {
+                    g.state = 'normal'; g.frightened = false; g.setTexture(g.baseTex);
+                    g.dir = {x:0, y:-1}; // Leave house
+                } else {
+                    let possibleDirs = [];
+                    let dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
+                    
+                    // Exit house override
+                    if (g.state !== 'eaten' && gcy >= 9 && gcy <= 11 && gcx >= 8 && gcx <= 12) {
+                        if (gcx === 10 && gcy >= 9) possibleDirs = [{x:0, y:-1}];
+                        else if (gcx < 10) possibleDirs = [{x:1, y:0}];
+                        else if (gcx > 10) possibleDirs = [{x:-1, y:0}];
+                    } else {
+                        // Standard Maze AI
+                        for (let d of dirs) {
+                            if (d.x === -g.dir.x && d.y === -g.dir.y && (g.dir.x !== 0 || g.dir.y !== 0)) continue;
+                            let nx = gcx + d.x; let ny = gcy + d.y;
+                            if (nx < 0 || nx >= COLS) { possibleDirs.push(d); continue; }
+                            if (mapData[ny] && mapData[ny][nx] !== 1 && (mapData[ny][nx] !== 4 || g.state === 'eaten')) {
+                                possibleDirs.push(d);
+                            }
+                        }
+                    }
+                    
+                    if (possibleDirs.length > 0) {
+                        if (g.frightened) { 
+                            g.dir = Phaser.Utils.Array.GetRandom(possibleDirs); 
+                        } else if (g.state === 'eaten') {
+                            let bestDir = possibleDirs[0]; let minDist = Infinity;
+                            for (let d of possibleDirs) {
+                                let dist = Math.abs((gcx + d.x) - 10) + Math.abs((gcy + d.y) - 10);
+                                if (dist < minDist) { minDist = dist; bestDir = d; }
+                            }
+                            g.dir = bestDir;
+                        } else {
+                            let bestDir = possibleDirs[0]; let minDist = Infinity;
+                            for (let d of possibleDirs) {
+                                let dist = Math.abs((gcx + d.x) - cx) + Math.abs((gcy + d.y) - cy);
+                                if (dist < minDist) { minDist = dist; bestDir = d; }
+                            }
+                            if (Math.random() < 0.1 && !(gcy >= 9 && gcy <= 11 && gcx >= 8 && gcx <= 12)) g.dir = Phaser.Utils.Array.GetRandom(possibleDirs); 
+                            else g.dir = bestDir;
+                        }
+                    } else { g.dir = {x: -g.dir.x, y: -g.dir.y}; }
+                }
+            } else {
+                g.x += g.dir.x * gMoveDist; g.y += g.dir.y * gMoveDist;
+            }
+            
+            if (g.x < -TILE/2) g.x = COLS * TILE + TILE/2;
+            if (g.x > COLS * TILE + TILE/2) g.x = -TILE/2;
+
+            if (Phaser.Math.Distance.Between(player.x, player.y, g.x, g.y) < 18) {
+                if (g.frightened && g.state !== 'eaten') {
+                    g.frightened = false; g.state = 'eaten'; updateScore(200); g.setTexture('dot'); g.setAlpha(0.5);
+                } else if (g.state !== 'eaten') {
+                    die();
+                }
+            }
+        });
+    }
+    </script>
+</body>
+</html>

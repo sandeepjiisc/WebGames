@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Brilliads - Elite Pro Pool</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', sans-serif; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.7); color: white; border: 2px solid #3b82f6; padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+        .back-to-hub:hover { background: #3b82f6; color: #fff; }
+        
+        #ui-layer { position: absolute; top: 10px; width: 100%; display: flex; justify-content: center; gap: 30px; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.8); padding: 10px 25px; border-radius: 10px; border: 2px solid #3b82f6; color: #fff; font-weight: bold; text-align: center; min-width: 140px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .active-player { border-color: #fbbf24; box-shadow: 0 0 20px #fbbf24; transform: scale(1.1); }
+        
+        #rotate-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e293b, #0f172a); color: white; display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000; text-align: center;
+        }
+        #rotate-overlay .icon { font-size: 80px; margin-bottom: 20px; animation: rotateAnim 2s infinite; }
+        @keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+        @media screen and (orientation: portrait) { #rotate-overlay { display: flex; } }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Back to Hub</a>
+    
+    <div id="rotate-overlay">
+        <div class="icon">🎱🔄</div>
+        <h2>ROTATE YOUR DEVICE</h2>
+        <p>Pro Billiards requires the wide table view</p>
+    </div>
+
+    <div id="ui-layer">
+        <div id="p1-box" class="stat-box active-player">PLAYER 1<br><span id="p1-type" style="color: #fbbf24; font-size: 12px;">READY</span></div>
+        <div id="p2-box" class="stat-box">PLAYER 2<br><span id="p2-type" style="color: #fbbf24; font-size: 12px;">...</span></div>
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+    const GAME_WIDTH = 1200;
+    const GAME_HEIGHT = 650;
+    const BALL_RADIUS = 15;
+    const POCKET_RADIUS = 30;
+
+    const config = {
+        type: Phaser.AUTO,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+        parent: 'game-container',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        physics: {
+            default: 'matter',
+            matter: {
+                gravity: { x: 0, y: 0 },
+                enableSleeping: true,
+                debug: false,
+                runner: {
+                    fps: 120, // High precision physics
+                    deltaMin: 1000/120,
+                    deltaMax: 1000/60
+                }
+            }
+        },
+        scene: { preload: preload, create: create, update: update }
+    };
+
+    const game = new Phaser.Game(config);
+
+    let cueBall, balls = [], pockets = [];
+    let cue, line;
+    let isAiming = false;
+    let turnState = 'AIMING';
+    let currentPlayer = 1;
+    let p1Type = null;
+    let p2Type = null;
+    let firstBallHit = false;
+
+    function preload() {}
+
+    function create() {
+        generateTextures(this);
+
+        // --- Realistic Physics Properties ---
+        const ballOptions = {
+            friction: 0.005,      // Surface drag (Low for roll)
+            frictionAir: 0.015,   // Air drag (Realistic deceleration)
+            restitution: 0.98,    // Energy bounce (High for rebounds)
+            density: 0.001,       // Mass relative to volume
+            label: 'ball'
+        };
+
+        const cushionOptions = {
+            isStatic: true,
+            restitution: 0.9,     // Cushion bounciness
+            friction: 0.01,
+            label: 'cushion'
+        };
+
+        // --- Table Setup ---
+        this.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT/2, GAME_WIDTH, GAME_HEIGHT, 0x0f172a); 
+        this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, 'felt');
+
+        // Matter.js Table Boundaries (Cushions)
+        const frameWidth = 60;
+        // Top
+        this.matter.add.rectangle(GAME_WIDTH/2, 20, GAME_WIDTH - 80, frameWidth, cushionOptions);
+        // Bottom
+        this.matter.add.rectangle(GAME_WIDTH/2, GAME_HEIGHT - 20, GAME_WIDTH - 80, frameWidth, cushionOptions);
+        // Left
+        this.matter.add.rectangle(20, GAME_HEIGHT/2, frameWidth, GAME_HEIGHT - 80, cushionOptions);
+        // Right
+        this.matter.add.rectangle(GAME_WIDTH - 20, GAME_HEIGHT/2, frameWidth, GAME_HEIGHT - 80, cushionOptions);
+
+        // --- Pockets (Sensors) ---
+        const pocketPos = [
+            {x: 55, y: 55}, {x: GAME_WIDTH/2, y: 45}, {x: GAME_WIDTH - 55, y: 55},
+            {x: 55, y: GAME_HEIGHT - 55}, {x: GAME_WIDTH/2, y: GAME_HEIGHT - 45}, {x: GAME_WIDTH - 55, y: GAME_HEIGHT - 55}
+        ];
+        pocketPos.forEach(pos => {
+            this.add.circle(pos.x, pos.y, POCKET_RADIUS, 0x000000).setDepth(1);
+            let sensor = this.matter.add.circle(pos.x, pos.y, POCKET_RADIUS * 0.8, { isSensor: true, isStatic: true, label: 'pocket' });
+        });
+
+        // --- Balls ---
+        cueBall = this.matter.add.sprite(300, GAME_HEIGHT/2, 'ball_0', null, ballOptions);
+        cueBall.setCircle(BALL_RADIUS);
+        cueBall.ballNum = 0;
+        cueBall.setDepth(5);
+
+        // Rack the balls
+        const rackStartX = 800;
+        const rackStartY = GAME_HEIGHT/2;
+        let ballSequence = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
+        let bIdx = 0;
+        for (let col = 0; col < 5; col++) {
+            for (let row = 0; row <= col; row++) {
+                let x = rackStartX + col * (BALL_RADIUS * 1.8);
+                let y = rackStartY - (col * BALL_RADIUS) + (row * BALL_RADIUS * 2);
+                let b = this.matter.add.sprite(x, y, `ball_${ballSequence[bIdx]}`, null, ballOptions);
+                b.setCircle(BALL_RADIUS);
+                b.ballNum = ballSequence[bIdx];
+                b.setDepth(5);
+                balls.push(b);
+                bIdx++;
+            }
+        }
+
+        // --- Interaction ---
+        cue = this.add.image(0, 0, 'cue_tex').setOrigin(1.05, 0.5).setDepth(10).setVisible(false);
+        line = this.add.graphics().setDepth(4);
+
+        this.input.on('pointerdown', () => { if(turnState === 'AIMING') isAiming = true; });
+        this.input.on('pointermove', (p) => { if(isAiming) updateAim(p); });
+        this.input.on('pointerup', (p) => { if(isAiming) { isAiming = false; fireShot(p); } });
+
+        this.matter.world.on('collisionstart', (e) => {
+            e.pairs.forEach(pair => {
+                if (pair.bodyA.label === 'pocket' || pair.bodyB.label === 'pocket') {
+                    const b = pair.bodyA.label === 'pocket' ? pair.bodyB.gameObject : pair.bodyA.gameObject;
+                    if (b && b.ballNum !== undefined) pocketBall(b);
+                }
+            });
+        });
+    }
+
+    function generateTextures(scene) {
+        // Table Felt
+        let tg = scene.add.graphics();
+        tg.fillStyle(0x065f46, 1); // Deep Green
+        tg.fillRect(0, 0, GAME_WIDTH - 80, GAME_HEIGHT - 80);
+        tg.lineStyle(2, 0x064e3b, 0.3);
+        for(let i=0; i<GAME_WIDTH; i+=40) { tg.moveTo(i, 0); tg.lineTo(i, GAME_HEIGHT); }
+        tg.strokePath();
+        tg.generateTexture('felt', GAME_WIDTH - 80, GAME_HEIGHT - 80);
+        tg.destroy();
+
+        // High-Quality Sphere textures
+        for (let i = 0; i <= 15; i++) {
+            let bg = scene.add.graphics();
+            let color = [0xffffff, 0xfacc15, 0x1d4ed8, 0xef4444, 0x7e22ce, 0xf97316, 0x15803d, 0x7f1d1d, 0x000000, 0xfacc15, 0x1d4ed8, 0xef4444, 0x7e22ce, 0xf97316, 0x15803d, 0x7f1d1d][i];
+            
+            // Sphere shading
+            bg.fillStyle(color, 1);
+            bg.fillCircle(BALL_RADIUS, BALL_RADIUS, BALL_RADIUS);
+            bg.fillStyle(0xffffff, 0.3);
+            bg.fillCircle(BALL_RADIUS * 0.6, BALL_RADIUS * 0.6, BALL_RADIUS * 0.5); // Specular highlight
+            
+            if (i > 0) { // Numbers
+                bg.fillStyle(0xffffff, 1);
+                bg.fillCircle(BALL_RADIUS, BALL_RADIUS, BALL_RADIUS * 0.5);
+                if (i > 8) { // Stripes overlay
+                    bg.lineStyle(4, 0xffffff, 0.5);
+                    bg.strokeCircle(BALL_RADIUS, BALL_RADIUS, BALL_RADIUS - 2);
+                }
+            }
+            bg.generateTexture(`ball_${i}`, BALL_RADIUS * 2, BALL_RADIUS * 2);
+            bg.destroy();
+        }
+
+        let cueG = scene.add.graphics();
+        cueG.fillStyle(0xd97706, 1); cueG.fillRect(0, 0, 350, 6); // Wood body
+        cueG.fillStyle(0xffffff, 1); cueG.fillRect(345, 0, 5, 6);   // Tip
+        cueG.generateTexture('cue_tex', 350, 6);
+        cueG.destroy();
+    }
+
+    function updateAim(p) {
+        const angle = Phaser.Math.Angle.Between(p.x, p.y, cueBall.x, cueBall.y);
+        const dist = Phaser.Math.Distance.Between(p.x, p.y, cueBall.x, cueBall.y);
+        const powerVisual = Math.min(dist, 200);
+
+        cue.setVisible(true).setPosition(cueBall.x, cueBall.y).setRotation(angle);
+        cue.x -= Math.cos(angle) * (powerVisual * 0.4);
+        cue.y -= Math.sin(angle) * (powerVisual * 0.4);
+
+        line.clear().lineStyle(1.5, 0xffffff, 0.4).beginPath().moveTo(cueBall.x, cueBall.y)
+            .lineTo(cueBall.x + Math.cos(angle) * 600, cueBall.y + Math.sin(angle) * 600).strokePath();
+    }
+
+    function fireShot(p) {
+        const angle = Phaser.Math.Angle.Between(p.x, p.y, cueBall.x, cueBall.y);
+        const dist = Phaser.Math.Distance.Between(p.x, p.y, cueBall.x, cueBall.y);
+        const power = Math.min(dist, 250);
+
+        if (power < 10) { cue.setVisible(false); line.clear(); return; }
+
+        cueBall.applyForce({ x: Math.cos(angle) * power * 0.0003, y: Math.sin(angle) * power * 0.0003 });
+        cue.setVisible(false); line.clear();
+        turnState = 'MOVING';
+    }
+
+    function pocketBall(ball) {
+        if (ball.ballNum === 0) { // Scratch
+            setTimeout(() => { ball.setPosition(300, GAME_HEIGHT/2); ball.setVelocity(0,0); ball.setAngularVelocity(0); }, 500);
+        } else if (ball.ballNum === 8) {
+            alert("Game Over - 8 Ball Pocketed."); window.location.reload();
+        } else {
+            if(!p1Type) {
+                p1Type = ball.ballNum < 8 ? 'SOLIDS' : 'STRIPES';
+                p2Type = p1Type === 'SOLIDS' ? 'STRIPES' : 'SOLIDS';
+                document.getElementById('p1-type').innerText = p1Type;
+                document.getElementById('p2-type').innerText = p2Type;
+            }
+            ball.destroy();
+            balls = balls.filter(b => b !== ball);
+        }
+    }
+
+    function update() {
+        if (turnState === 'MOVING') {
+            let stillMoving = false;
+            if (cueBall.body.speed > 0.15) stillMoving = true;
+            balls.forEach(b => { if(b.active && b.body.speed > 0.15) stillMoving = true; });
+
+            if (!stillMoving) {
+                turnState = 'AIMING';
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                document.getElementById('p1-box').className = currentPlayer === 1 ? 'stat-box active-player' : 'stat-box';
+                document.getElementById('p2-box').className = currentPlayer === 2 ? 'stat-box active-player' : 'stat-box';
+            }
+        }
+    }
+    </script>
+</body>
+</html>

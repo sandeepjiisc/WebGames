@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Bubble Crush: Happy Bird</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%2387CEEB"/><circle cx="50" cy="50" r="40" fill="%23ffffff" opacity="0.2" /></svg>'); background-size: cover;}
+        
+        .back-to-hub { position: absolute; top: 15px; left: 15px; background: rgba(0, 0, 0, 0.6); color: white; border: 2px solid #fff; padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-size: 14px; font-weight: bold; transition: all 0.2s; backdrop-filter: blur(5px); }
+        .back-to-hub:hover { background: #fff; color: #000; }
+        
+        #ui-layer { position: absolute; top: 20px; width: 100%; display: flex; justify-content: space-around; align-items: flex-start; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 15px; font-size: 24px; font-weight: bold; border: 2px solid rgba(255,255,255,0.5); backdrop-filter: blur(5px); text-align: center; }
+        .stat-box span { color: #facc15; font-size: 28px; display: block; margin-top: 5px;}
+        
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1500; text-align: center; backdrop-filter: blur(5px); }
+        #overlay h1 { font-size: 70px; margin: 0 0 10px 0; color: #facc15; text-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        #overlay p { font-size: 24px; margin: 0 0 30px 0; max-width: 600px; line-height: 1.5; }
+        #overlay button { padding: 15px 40px; font-size: 24px; font-weight: bold; cursor: pointer; background: #2ed573; border: none; color: white; border-radius: 30px; box-shadow: 0 6px 0 #20bf6b; transition: all 0.1s; text-transform: uppercase; }
+        #overlay button:active { transform: translateY(6px); box-shadow: 0 0 0 #20bf6b; }
+        
+        #level-clear { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 60px; font-weight: bold; color: #fff; text-shadow: 0 0 20px #facc15; z-index: 1000; display: none; text-align: center; pointer-events: none; animation: popIn 0.5s ease-out forwards; }
+        @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 80% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="ui-layer">
+        <div class="stat-box">SCORE<span id="score-text">0</span></div>
+        <div class="stat-box">LEVEL<span id="level-text">1</span></div>
+        <div class="stat-box">BIRDS LEFT<span id="birds-text">0</span></div>
+    </div>
+
+    <div id="overlay">
+        <h1 id="overlay-title">BUBBLE CRUSH</h1>
+        <p id="overlay-desc">Aim and shoot to match 3 or more bubbles of the same color.<br>Pop the bubbles holding the Baby Birds to rescue them!</p>
+        <button id="overlay-btn" onclick="startGame()">PLAY</button>
+    </div>
+
+    <div id="level-clear">LEVEL CLEAR!<br><span style="font-size:30px;color:#2ed573">Birds Rescued!</span></div>
+
+    <div id="game-container"></div>
+
+    <script>
+        const GAME_WIDTH = 640;
+        const GAME_HEIGHT = 960;
+        const BUBBLE_RADIUS = 22;
+        const BUBBLE_DIAMETER = BUBBLE_RADIUS * 2;
+        const ROW_HEIGHT = BUBBLE_DIAMETER * 0.866; // Hexagonal grid height offset (sqrt(3)/2)
+        
+        const COLORS = [0xff4757, 0x1e90ff, 0x2ed573, 0xfacc15, 0x9c88ff, 0xffa502]; // Red, Blue, Green, Yellow, Purple, Orange
+        const COLOR_NAMES = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+
+        const config = {
+            type: Phaser.WEBGL,
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+            parent: 'game-container',
+            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+            backgroundColor: 'transparent',
+            physics: { default: 'arcade', arcade: { debug: false } },
+            scene: { create: create, update: update }
+        };
+
+        let game;
+        window.onload = function() { game = new Phaser.Game(config); };
+
+        // Game State
+        let level = 1;
+        let score = 0;
+        let birdsTotal = 0;
+        let gameState = 'start'; // start, playing, animating, gameover
+        
+        // Entities
+        let bubbleGroup;
+        let birdGroup;
+        let currentBubble;
+        let nextBubbleColor;
+        let nextBubblePreview;
+        let cannonLine;
+        let cannonBase;
+        
+        // Grid Logic
+        let grid = []; // 2D array [row][col]
+        const MAX_COLS = Math.floor(GAME_WIDTH / BUBBLE_DIAMETER);
+        const MAX_ROWS = 20;
+
+        const LEVELS = [
+            // Level 1: Simple
+            [
+                "R R R B B B R R R",
+                " R R B b B R R R ",
+                "G G G G G G G G G",
+                " G G g G g G G G "
+            ],
+            // Level 2: Hex patterns
+            [
+                "R R B B Y Y G G R",
+                " R B b Y y G G R ",
+                "B B Y Y G G R R B",
+                " B Y y G g R R B ",
+                "Y Y G G R R B B Y",
+                " Y G g R r B B Y "
+            ],
+            // Level 3: Deep V
+            [
+                "P P P P P P P P P",
+                " P P P p P P P P ",
+                "O O O O O O O O O",
+                " - O O o O O O - ",
+                "- - B B b B B - -",
+                " - - B B B B - - ",
+                "- - - R r R - - -",
+                " - - - R R - - - "
+            ],
+            // Level 4: Scattered Birds
+            [
+                "R B G Y P O R B G",
+                " r b g y p o r b ",
+                "G B R O P Y G B R",
+                " g b r o p y g b ",
+                "R R R B B B G G G",
+                " R r R B b B G g "
+            ],
+            // Level 5: The Blockade
+            [
+                "B B B B B B B B B",
+                " B B B B B B B B ",
+                "R R R R R R R R R",
+                " r - - - - - - r ",
+                "G G G G G G G G G",
+                " g - - - - - - g ",
+                "Y Y Y Y Y Y Y Y Y",
+                " y - - - - - - y "
+            ]
+        ];
+
+        function create() {
+            generateGraphics(this);
+
+            bubbleGroup = this.add.group();
+            birdGroup = this.add.group();
+
+            // Background decor
+            let clouds = this.add.graphics();
+            clouds.fillStyle(0xffffff, 0.3);
+            clouds.fillCircle(100, 200, 60); clouds.fillCircle(160, 220, 50); clouds.fillCircle(60, 220, 40);
+            clouds.fillCircle(500, 400, 70); clouds.fillCircle(570, 420, 50); clouds.fillCircle(440, 430, 45);
+
+            // Cannon Base
+            cannonBase = this.add.image(GAME_WIDTH/2, GAME_HEIGHT - 60, 'cannon');
+            cannonBase.setDepth(100);
+
+            // Aiming Line
+            cannonLine = this.add.graphics();
+            cannonLine.setDepth(90);
+
+            // Robust mobile and desktop input
+            this.input.on('pointerup', (pointer) => {
+                if (gameState === 'playing' && currentBubble && currentBubble.body && currentBubble.body.velocity.lengthSq() < 1) {
+                    shootBubble.call(this, pointer);
+                }
+            }, this);
+            
+            // Clear line if pointer leaves the game area
+            this.input.on('gameout', () => {
+                if (cannonLine) cannonLine.clear();
+            });
+        }
+
+        function generateGraphics(scene) {
+            let g = scene.add.graphics();
+
+            // Bubbles
+            COLORS.forEach((color, idx) => {
+                g.clear();
+                // Outer glow/shadow
+                g.fillStyle(0x000000, 0.2); g.fillCircle(BUBBLE_RADIUS, BUBBLE_RADIUS+2, BUBBLE_RADIUS);
+                // Main color
+                g.fillStyle(color, 1); g.fillCircle(BUBBLE_RADIUS, BUBBLE_RADIUS, BUBBLE_RADIUS);
+                // Highlight (Shine)
+                g.fillStyle(0xffffff, 0.6); g.fillEllipse(BUBBLE_RADIUS - 6, BUBBLE_RADIUS - 8, 12, 8);
+                g.generateTexture('bubble_' + idx, BUBBLE_DIAMETER, BUBBLE_DIAMETER+2);
+            });
+
+            // Bird (Trapped inside bubble)
+            g.clear();
+            g.fillStyle(0xffffff, 0.9); g.fillCircle(15, 15, 12); // Bird body
+            g.fillStyle(0x000000, 1); g.fillCircle(11, 12, 2); g.fillCircle(19, 12, 2); // Eyes
+            g.fillStyle(0xffa502, 1); g.fillTriangle(15, 16, 12, 20, 18, 20); // Beak
+            g.generateTexture('bird', 30, 30);
+
+            // Cannon
+            g.clear();
+            g.fillStyle(0x333333, 1);
+            g.fillRoundedRect(0, 0, 80, 80, 20);
+            g.fillStyle(0x555555, 1);
+            g.fillCircle(40, 40, 30);
+            g.fillStyle(0x111111, 1);
+            g.fillCircle(40, 40, 20);
+            g.generateTexture('cannon', 80, 80);
+        }
+
+        window.startGame = function() {
+            document.getElementById('overlay').style.display = 'none';
+            score = 0;
+            level = 1;
+            updateUI();
+            buildLevel(game.scene.scenes[0]);
+        }
+
+        function buildLevel(scene) {
+            bubbleGroup.clear(true, true);
+            birdGroup.clear(true, true);
+            grid = [];
+            for(let r=0; r<MAX_ROWS; r++) grid.push(new Array(MAX_COLS).fill(null));
+            birdsTotal = 0;
+
+            let levelData = LEVELS[(level - 1) % LEVELS.length];
+            
+            // For levels beyond the predefined ones, randomly generate rows
+            if (level > LEVELS.length) {
+                levelData = generateRandomLevel(level);
+            }
+
+            for (let row = 0; row < levelData.length; row++) {
+                let rowStr = levelData[row];
+                let isOffsetRow = row % 2 !== 0;
+                let colsInRow = isOffsetRow ? MAX_COLS - 1 : MAX_COLS;
+                
+                // Parse string to fill grid. Format: 'R' (Red), 'r' (Red + Bird), '-' (Empty)
+                let chars = rowStr.replace(/\s+/g, '').split('');
+                
+                for (let col = 0; col < colsInRow; col++) {
+                    if (col >= chars.length) continue;
+                    let char = chars[col];
+                    if (char === '-') continue;
+
+                    let colorIdx = getColorIndexFromChar(char);
+                    let hasBird = isCharBird(char);
+
+                    if (colorIdx !== -1) {
+                        createGridBubble(scene, row, col, colorIdx, hasBird);
+                    }
+                }
+            }
+
+            updateUI();
+            spawnNextBubble(scene);
+            gameState = 'playing';
+        }
+
+        function generateRandomLevel(lvl) {
+            let data = [];
+            let rows = Math.min(6 + Math.floor(lvl/2), 12);
+            let colorsAvailable = Math.min(3 + Math.floor(lvl/3), 6);
+            let hasBird = false;
+            
+            for(let r=0; r<rows; r++) {
+                let isOffset = r%2!==0;
+                let cols = isOffset ? MAX_COLS - 1 : MAX_COLS;
+                let rowStr = "";
+                for(let c=0; c<cols; c++) {
+                    if (Math.random() > 0.8) {
+                        rowStr += "-";
+                    } else {
+                        let colIdx = Math.floor(Math.random() * colorsAvailable);
+                        let char = COLOR_NAMES[colIdx][0].toUpperCase();
+                        // 15% chance for a bird
+                        if (Math.random() < 0.15) {
+                            char = char.toLowerCase();
+                            hasBird = true;
+                        }
+                        rowStr += char;
+                    }
+                }
+                data.push(rowStr);
+            }
+            
+            // Guarantee at least one bird
+            if (!hasBird && data.length > 0 && data[0].length > 0) {
+                let firstChar = data[0][0];
+                if (firstChar === '-') {
+                    let colIdx = Math.floor(Math.random() * colorsAvailable);
+                    data[0] = COLOR_NAMES[colIdx][0].toLowerCase() + data[0].substring(1);
+                } else {
+                    data[0] = firstChar.toLowerCase() + data[0].substring(1);
+                }
+            }
+            return data;
+        }
+
+        function getColorIndexFromChar(char) {
+            let c = char.toLowerCase();
+            if (c === 'r') return 0;
+            if (c === 'b') return 1;
+            if (c === 'g') return 2;
+            if (c === 'y') return 3;
+            if (c === 'p') return 4;
+            if (c === 'o') return 5;
+            return -1;
+        }
+        function isCharBird(char) { return char === char.toLowerCase() && char !== '-'; }
+
+        function getBubbleX(row, col) {
+            let offset = (row % 2 !== 0) ? BUBBLE_RADIUS : 0;
+            return col * BUBBLE_DIAMETER + BUBBLE_RADIUS + offset + (GAME_WIDTH - (MAX_COLS * BUBBLE_DIAMETER))/2; // Center grid
+        }
+        function getBubbleY(row) {
+            return row * ROW_HEIGHT + BUBBLE_RADIUS + 20; // Top padding
+        }
+        
+        function getGridPos(x, y) {
+            let row = Math.round((y - 20 - BUBBLE_RADIUS) / ROW_HEIGHT);
+            // Clamp row
+            row = Phaser.Math.Clamp(row, 0, MAX_ROWS - 1);
+            let offset = (row % 2 !== 0) ? BUBBLE_RADIUS : 0;
+            let startX = (GAME_WIDTH - (MAX_COLS * BUBBLE_DIAMETER))/2;
+            let col = Math.round((x - BUBBLE_RADIUS - offset - startX) / BUBBLE_DIAMETER);
+            
+            let maxC = (row % 2 !== 0) ? MAX_COLS - 2 : MAX_COLS - 1;
+            col = Phaser.Math.Clamp(col, 0, maxC);
+            return { row, col };
+        }
+
+        function createGridBubble(scene, row, col, colorIdx, hasBird) {
+            let x = getBubbleX(row, col);
+            let y = getBubbleY(row);
+            
+            let bubble = scene.physics.add.sprite(x, y, 'bubble_' + colorIdx);
+            bubble.colorIdx = colorIdx;
+            bubble.gridRow = row;
+            bubble.gridCol = col;
+            bubbleGroup.add(bubble);
+            grid[row][col] = bubble;
+
+            if (hasBird) {
+                let bird = scene.add.image(x, y, 'bird');
+                bubble.bird = bird;
+                birdGroup.add(bird);
+                birdsTotal++;
+            }
+        }
+
+        function spawnNextBubble(scene) {
+            if (currentBubble) return;
+
+            // Pick a color currently on board
+            let activeColors = new Set();
+            for(let r=0; r<MAX_ROWS; r++) {
+                for(let c=0; c<MAX_COLS; c++) {
+                    if(grid[r][c]) activeColors.add(grid[r][c].colorIdx);
+                }
+            }
+            let colorsArr = Array.from(activeColors);
+            if (colorsArr.length === 0) colorsArr = [0]; // fallback
+
+            let colorIdx = nextBubbleColor !== undefined ? nextBubbleColor : colorsArr[Math.floor(Math.random() * colorsArr.length)];
+            nextBubbleColor = colorsArr[Math.floor(Math.random() * colorsArr.length)];
+
+            currentBubble = scene.physics.add.sprite(cannonBase.x, cannonBase.y, 'bubble_' + colorIdx);
+            currentBubble.colorIdx = colorIdx;
+            currentBubble.setCircle(BUBBLE_RADIUS);
+            currentBubble.setCollideWorldBounds(true);
+            currentBubble.setBounce(1, 1);
+            
+            // Preview
+            if(nextBubblePreview && nextBubblePreview.active) nextBubblePreview.destroy();
+            nextBubblePreview = scene.add.sprite(cannonBase.x + 60, cannonBase.y + 20, 'bubble_' + nextBubbleColor).setScale(0.6).setAlpha(0.8);
+        }
+
+        function updateAim(pointer) {
+            if (gameState !== 'playing' || !currentBubble || !currentBubble.body || (currentBubble.body.velocity.x !== 0 || currentBubble.body.velocity.y !== 0)) {
+                if (cannonLine) cannonLine.clear();
+                return;
+            }
+            
+            cannonLine.clear();
+            let dx = pointer.x - cannonBase.x;
+            let dy = pointer.y - cannonBase.y;
+            
+            // Can't shoot downwards (keep it pointing at least slightly up)
+            if (dy > -10) dy = -10;
+            
+            let angle = Math.atan2(dy, dx);
+            cannonBase.rotation = angle + Math.PI/2;
+
+            // Draw dotted aiming line
+            cannonLine.lineStyle(4, 0xffffff, 0.5);
+            let px = cannonBase.x;
+            let py = cannonBase.y;
+            let length = 800;
+            
+            // Calculate ricochets for aiming line
+            cannonLine.beginPath();
+            cannonLine.moveTo(px, py);
+            
+            let currentAngle = angle;
+            for(let i=0; i<3; i++) { // Max 3 bounces prediction
+                let nextX = px + Math.cos(currentAngle) * length;
+                let nextY = py + Math.sin(currentAngle) * length;
+                
+                // Wall hit logic for aiming
+                if (nextX < BUBBLE_RADIUS) {
+                    let hitY = py + (Math.sin(currentAngle)/Math.cos(currentAngle)) * (BUBBLE_RADIUS - px);
+                    cannonLine.lineTo(BUBBLE_RADIUS, hitY);
+                    px = BUBBLE_RADIUS; py = hitY;
+                    currentAngle = Math.PI - currentAngle;
+                } else if (nextX > GAME_WIDTH - BUBBLE_RADIUS) {
+                    let hitY = py + (Math.sin(currentAngle)/Math.cos(currentAngle)) * ((GAME_WIDTH - BUBBLE_RADIUS) - px);
+                    cannonLine.lineTo(GAME_WIDTH - BUBBLE_RADIUS, hitY);
+                    px = GAME_WIDTH - BUBBLE_RADIUS; py = hitY;
+                    currentAngle = Math.PI - currentAngle;
+                } else {
+                    cannonLine.lineTo(nextX, nextY);
+                    break;
+                }
+            }
+            cannonLine.strokePath();
+        }
+
+        function shootBubble(pointer) {
+            if (gameState !== 'playing' || !currentBubble || !currentBubble.body || (currentBubble.body.velocity.x !== 0 || currentBubble.body.velocity.y !== 0)) {
+                if (cannonLine) cannonLine.clear();
+                return;
+            }
+            
+            let dx = pointer.x - cannonBase.x;
+            let dy = pointer.y - cannonBase.y;
+            if (dy > -10) dy = -10;
+            
+            let angle = Math.atan2(dy, dx);
+            let speed = 1200;
+            
+            currentBubble.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+            if (cannonLine) cannonLine.clear();
+        }
+
+        function update() {
+            if (gameState !== 'playing' && gameState !== 'animating') {
+                if (cannonLine) cannonLine.clear();
+                return;
+            }
+
+            if (currentBubble && currentBubble.body && (currentBubble.body.velocity.x !== 0 || currentBubble.body.velocity.y !== 0)) {
+                if (cannonLine) cannonLine.clear();
+                
+                // Check collision with top wall
+                if (currentBubble.y <= BUBBLE_RADIUS + 20) {
+                    snapBubble();
+                    return;
+                }
+
+                // Check collision with grid bubbles
+                let hit = false;
+                for (let r = 0; r < MAX_ROWS; r++) {
+                    for (let c = 0; c < MAX_COLS; c++) {
+                        let b = grid[r][c];
+                        if (b) {
+                            let dist = Phaser.Math.Distance.Between(currentBubble.x, currentBubble.y, b.x, b.y);
+                            if (dist < BUBBLE_DIAMETER - 2) {
+                                hit = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hit) break;
+                }
+
+                if (hit) {
+                    snapBubble();
+                }
+            }
+        }
+
+        function snapBubble() {
+            currentBubble.setVelocity(0, 0);
+            
+            // Find closest grid spot
+            let pos = getGridPos(currentBubble.x, currentBubble.y);
+            
+            // If spot is taken, find the absolute nearest empty spot on the grid
+            if (grid[pos.row][pos.col]) {
+                let bestDist = 999999;
+                let bestPos = null;
+                for(let r = 0; r < MAX_ROWS; r++) {
+                    let maxC = (r % 2 !== 0) ? MAX_COLS - 1 : MAX_COLS;
+                    for(let c = 0; c < maxC; c++) {
+                        if (!grid[r][c]) {
+                            let nx = getBubbleX(r, c);
+                            let ny = getBubbleY(r);
+                            let d = Phaser.Math.Distance.Between(currentBubble.x, currentBubble.y, nx, ny);
+                            if (d < bestDist) { 
+                                bestDist = d; 
+                                bestPos = {row: r, col: c}; 
+                            }
+                        }
+                    }
+                }
+                if (bestPos) pos = bestPos;
+            }
+
+            // Lock in
+            currentBubble.gridRow = pos.row;
+            currentBubble.gridCol = pos.col;
+            grid[pos.row][pos.col] = currentBubble;
+            
+            // Animate snap
+            gameState = 'animating';
+            game.scene.scenes[0].tweens.add({
+                targets: currentBubble,
+                x: getBubbleX(pos.row, pos.col),
+                y: getBubbleY(pos.row),
+                duration: 50,
+                onComplete: () => {
+                    if (currentBubble && currentBubble.active) bubbleGroup.add(currentBubble);
+                    checkMatches(pos.row, pos.col);
+                }
+            });
+        }
+
+        function getNeighbors(r, c) {
+            let neighbors = [];
+            const dirsOffset = [ [[0,-1], [0,1], [-1,-1], [-1,0], [1,-1], [1,0]], // Odd rows
+                                 [[0,-1], [0,1], [-1,0], [-1,1], [1,0], [1,1]] ]; // Even rows
+                                 
+            let dirs = (r % 2 !== 0) ? dirsOffset[0] : dirsOffset[1];
+            
+            dirs.forEach(d => {
+                let nr = r + d[0]; let nc = c + d[1];
+                if (nr >= 0 && nr < MAX_ROWS && nc >= 0 && nc < MAX_COLS) {
+                    if (!(nr % 2 !== 0 && nc >= MAX_COLS - 1)) { // Ignore out of bounds for offset rows
+                        neighbors.push({row: nr, col: nc});
+                    }
+                }
+            });
+            return neighbors;
+        }
+
+        function checkMatches(r, c) {
+            let startBubble = grid[r][c];
+            if (!startBubble) { finalizeTurn(); return; }
+
+            let color = startBubble.colorIdx;
+            let matchGroup = new Set();
+            let queue = [{row: r, col: c}];
+            matchGroup.add(r + "," + c);
+
+            // BFS for matching colors
+            while (queue.length > 0) {
+                let cur = queue.shift();
+                let neighbors = getNeighbors(cur.row, cur.col);
+                
+                neighbors.forEach(n => {
+                    if (grid[n.row][n.col] && grid[n.row][n.col].colorIdx === color) {
+                        let key = n.row + "," + n.col;
+                        if (!matchGroup.has(key)) {
+                            matchGroup.add(key);
+                            queue.push(n);
+                        }
+                    }
+                });
+            }
+
+            if (matchGroup.size >= 3) {
+                // Pop them!
+                matchGroup.forEach(key => {
+                    let [rr, cc] = key.split(',').map(Number);
+                    popBubble(rr, cc);
+                });
+                
+                // Add Score
+                score += matchGroup.size * 10;
+                
+                // After popping, check for floating bubbles
+                game.scene.scenes[0].time.delayedCall(100, checkFloatingBubbles);
+            } else {
+                finalizeTurn();
+            }
+        }
+
+        function popBubble(r, c) {
+            let b = grid[r][c];
+            if (!b) return;
+            
+            grid[r][c] = null;
+            
+            if (b.bird) {
+                rescueBird(b.bird);
+                b.bird = null; // Detach
+            }
+            
+            // Effect
+            game.scene.scenes[0].tweens.add({
+                targets: b, scaleX: 1.5, scaleY: 1.5, alpha: 0, duration: 150,
+                onComplete: () => { if (b && b.active) b.destroy(); }
+            });
+        }
+
+        function rescueBird(bird) {
+            birdsTotal--;
+            updateUI();
+            
+            game.scene.scenes[0].tweens.add({
+                targets: bird, y: bird.y - 100, alpha: 0, duration: 800, ease: 'Power2',
+                onComplete: () => { if (bird && bird.active) bird.destroy(); }
+            });
+        }
+
+        function checkFloatingBubbles() {
+            let attached = new Set();
+            let queue = [];
+            
+            // Find all bubbles attached to ceiling
+            for (let c = 0; c < MAX_COLS; c++) {
+                if (grid[0][c]) {
+                    attached.add(0 + "," + c);
+                    queue.push({row: 0, col: c});
+                }
+            }
+
+            // BFS to find all connected bubbles
+            while (queue.length > 0) {
+                let cur = queue.shift();
+                let neighbors = getNeighbors(cur.row, cur.col);
+                
+                neighbors.forEach(n => {
+                    if (grid[n.row][n.col]) {
+                        let key = n.row + "," + n.col;
+                        if (!attached.has(key)) {
+                            attached.add(key);
+                            queue.push(n);
+                        }
+                    }
+                });
+            }
+
+            // Drop unattached bubbles
+            let droppedCount = 0;
+            for (let r = 1; r < MAX_ROWS; r++) {
+                for (let c = 0; c < MAX_COLS; c++) {
+                    let b = grid[r][c];
+                    if (b) {
+                        if (!attached.has(r + "," + c)) {
+                            grid[r][c] = null;
+                            dropBubble(b);
+                            droppedCount++;
+                        }
+                    }
+                }
+            }
+
+            score += droppedCount * 20; // Bonus for dropping
+            game.scene.scenes[0].time.delayedCall(300, finalizeTurn);
+        }
+
+        function dropBubble(b) {
+            if (b.bird) {
+                rescueBird(b.bird); // Rescued if dropped!
+                b.bird = null;
+            }
+            
+            game.scene.scenes[0].physics.world.enable(b);
+            b.setCollideWorldBounds(false);
+            b.body.setGravityY(800);
+            
+            game.scene.scenes[0].time.delayedCall(1500, () => {
+                if(b && b.active) b.destroy();
+            });
+        }
+
+        function finalizeTurn() {
+            if (gameState === 'gameover') return; // Prevent double calls
+
+            updateUI();
+            currentBubble = null;
+            
+            if (birdsTotal <= 0) {
+                levelWin();
+                return;
+            }
+
+            // Check Game Over (Reached bottom)
+            let isDead = false;
+            for (let c = 0; c < MAX_COLS; c++) {
+                if (grid[MAX_ROWS - 3][c]) isDead = true; // Danger line
+            }
+
+            if (isDead) {
+                gameOver();
+            } else {
+                spawnNextBubble(game.scene.scenes[0]);
+                gameState = 'playing';
+            }
+        }
+
+        function levelWin() {
+            if (gameState === 'gameover') return; // Strict lock
+            gameState = 'gameover';
+            if (cannonLine) cannonLine.clear();
+
+            let txt = document.getElementById('level-clear');
+            txt.style.display = 'block';
+            
+            score += 1000; // Win bonus
+            updateUI();
+
+            game.scene.scenes[0].time.delayedCall(2500, () => {
+                txt.style.display = 'none';
+                level++;
+                buildLevel(game.scene.scenes[0]);
+            });
+        }
+
+        function gameOver() {
+            if (gameState === 'gameover') return; // Strict lock
+            gameState = 'gameover';
+            if (cannonLine) cannonLine.clear();
+
+            document.getElementById('overlay-title').innerText = "GAME OVER";
+            document.getElementById('overlay-desc').innerText = "The bubbles crushed the birds!\nFinal Score: " + score;
+            document.getElementById('overlay-btn').innerText = "TRY AGAIN";
+            document.getElementById('overlay').style.display = 'flex';
+        }
+
+        function updateUI() {
+            document.getElementById('score-text').innerText = score;
+            document.getElementById('level-text').innerText = level;
+            document.getElementById('birds-text').innerText = birdsTotal;
+        }
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Donkey Kong: Classic</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Courier New', Courier, monospace; color: white; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.8); color: white; border: 2px solid #facc15; padding: 8px 12px; border-radius: 8px; cursor: pointer; z-index: 1000; text-decoration: none; font-weight: bold; }
+        #ui-layer { position: absolute; top: 10px; width: 100%; display: flex; justify-content: center; gap: 30px; pointer-events: none; z-index: 500; }
+        .stat-box { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 2px solid #facc15; font-weight: bold; font-size: 18px; color: #fff;}
+        .stat-box span { color: #f43f5e; }
+        
+        #rotate-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; color: white; display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000; text-align: center;
+        }
+        #rotate-overlay .icon { font-size: 80px; margin-bottom: 20px; animation: rotateAnim 2s infinite; }
+        @keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+        @media screen and (orientation: portrait) { #rotate-overlay { display: flex; } }
+        
+        #game-over {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 1500; text-align: center; color: white;
+        }
+        #game-over h2 { font-size: 60px; margin: 0 0 20px 0; color: #f43f5e; text-shadow: 0 0 10px #f43f5e; }
+        #game-over button { padding: 15px 30px; font-size: 20px; font-weight: bold; cursor: pointer; background: #3b82f6; border: none; color: white; border-radius: 10px; }
+        
+        /* Level Intro */
+        #level-intro {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 40px; color: #60a5fa; font-weight: bold; text-shadow: 2px 2px #000;
+            display: none; z-index: 1000; text-align: center; background: rgba(0,0,0,0.8); padding: 20px; border: 4px solid #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+    
+    <div id="rotate-overlay">
+        <div class="icon">📱🔄</div>
+        <h2>ROTATE YOUR DEVICE</h2>
+        <p>This arcade game requires Landscape Mode</p>
+    </div>
+
+    <div id="ui-layer">
+        <div class="stat-box">1UP<br><span id="score-text">000000</span></div>
+        <div class="stat-box">LIVES<br><span id="lives-text">3</span></div>
+        <div class="stat-box">LEVEL<br><span id="level-text">1</span></div>
+    </div>
+
+    <div id="level-intro">HOW HIGH CAN YOU GET?</div>
+
+    <div id="game-over">
+        <h2>GAME OVER</h2>
+        <button onclick="resetGame()">INSERT COIN</button>
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+    const GAME_WIDTH = 800;
+    const GAME_HEIGHT = 600;
+
+    const config = {
+        type: Phaser.WEBGL,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+        parent: 'game-container',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        backgroundColor: '#000000',
+        physics: { default: 'arcade', arcade: { gravity: { y: 1000 }, debug: false } },
+        scene: { create: create, update: update }
+    };
+
+    let game;
+    window.onload = function() {
+        game = new Phaser.Game(config);
+    };
+
+    let player, dk, pauline;
+    let platforms, ladders, barrels, rivets, conveyors, elevators, lavas;
+    let cursors;
+    let score = 0, lives = 3, level = 1;
+    let isGameOver = false, isLevelClear = false;
+    let barrelTimer;
+    let mobileControls = { left: false, right: false, up: false, down: false, jump: false };
+    let playerClimbing = false;
+    let currentLadder = null;
+    let rivetsRemaining = 0;
+    let currentLevelType = '';
+    let jumpBoost = 0;
+
+    function create() {
+        generateTextures(this);
+
+        platforms = this.physics.add.staticGroup();
+        ladders = this.physics.add.staticGroup();
+        barrels = this.physics.add.group();
+        rivets = this.physics.add.staticGroup();
+        conveyors = this.physics.add.staticGroup();
+        lavas = this.physics.add.staticGroup();
+        elevators = this.physics.add.group({ allowGravity: false, immovable: true });
+
+        this.anims.create({ key: 'run_r', frames: [ { key: 'mario_r1' }, { key: 'mario_r2' } ], frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'run_l', frames: [ { key: 'mario_l1' }, { key: 'mario_l2' } ], frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'climb', frames: [ { key: 'mario_c1' }, { key: 'mario_c2' } ], frameRate: 8, repeat: -1 });
+        this.anims.create({ key: 'dk_throw', frames: [ { key: 'dk_1' }, { key: 'dk_2' } ], frameRate: 2, repeat: -1 });
+        this.anims.create({ key: 'barrel_roll', frames: [ { key: 'barrel_1' }, { key: 'barrel_2' } ], frameRate: 10, repeat: -1 });
+        
+        // Lava anim
+        this.anims.create({ key: 'lava_anim', frames: [ { key: 'lava_1' }, { key: 'lava_2' } ], frameRate: 4, repeat: -1 });
+        // Conveyor anims
+        this.anims.create({ key: 'conveyor_r', frames: [ { key: 'con_1' }, { key: 'con_2' } ], frameRate: 10, repeat: -1 });
+        this.anims.create({ key: 'conveyor_l', frames: [ { key: 'con_2' }, { key: 'con_1' } ], frameRate: 10, repeat: -1 });
+
+        player = this.physics.add.sprite(100, 500, 'mario_r1');
+        player.body.setSize(16, 24);
+        player.setCollideWorldBounds(true);
+        player.setDepth(10);
+
+        dk = this.add.sprite(150, 100, 'dk_1').setDepth(5);
+        dk.play('dk_throw');
+
+        pauline = this.add.sprite(350, 60, 'pauline').setDepth(5);
+        
+        this.physics.add.collider(player, platforms, null, checkPlatformCollision, this);
+        this.physics.add.collider(barrels, platforms);
+        this.physics.add.collider(player, conveyors, null, checkPlatformCollision, this);
+        this.physics.add.collider(barrels, conveyors);
+        this.physics.add.collider(player, elevators, null, checkPlatformCollision, this);
+        this.physics.add.collider(barrels, elevators);
+
+        this.physics.add.overlap(player, ladders, handleLadderOverlap, null, this);
+        this.physics.add.overlap(player, barrels, hitHazard, null, this);
+        this.physics.add.overlap(player, lavas, hitHazard, null, this);
+        this.physics.add.overlap(player, rivets, collectRivet, null, this);
+        
+        this.physics.add.overlap(barrels, ladders, (barrel, ladder) => {
+            if (barrel.fallingDownLadder) return;
+            if (Math.abs(barrel.x - ladder.x) < 5 && barrel.y < ladder.y - ladder.height/2 + 10 && barrel.body.velocity.y === 0) {
+                if (Math.random() < 0.25) {
+                    barrel.fallingDownLadder = true;
+                    barrel.setVelocityX(0);
+                    barrel.x = ladder.x; 
+                    barrel.body.checkCollision.down = false;
+                    this.time.delayedCall(400, () => {
+                        if(barrel && barrel.body) {
+                            barrel.body.checkCollision.down = true;
+                            barrel.fallingDownLadder = false;
+                        }
+                    });
+                }
+            }
+        });
+
+        cursors = this.input.keyboard.createCursorKeys();
+        this.input.keyboard.addKey('SPACE');
+
+        createMobileControls(this);
+        
+        startLevel.call(this, level);
+    }
+
+    function checkPlatformCollision(player, platform) {
+        if (playerClimbing && currentLadder) return false;
+        if (player.body.velocity.y < 0) return false;
+        return true;
+    }
+
+    function generateTextures(scene) {
+        let g = scene.add.graphics();
+        
+        const drawGirder = (key, color) => {
+            g.fillStyle(color, 1); g.fillRect(0, 0, 40, 16);
+            g.lineStyle(2, 0x000000, 1);
+            g.beginPath(); g.moveTo(0, 0); g.lineTo(40, 16); g.moveTo(40, 0); g.lineTo(0, 16); g.strokePath();
+            g.generateTexture(key, 40, 16); g.clear();
+        }
+        
+        drawGirder('girder_red', 0xf43f5e);
+        drawGirder('girder_yellow', 0xfacc15);
+        drawGirder('girder_blue', 0x3b82f6);
+        drawGirder('girder_green', 0x22c55e);
+        drawGirder('girder_purple', 0xa855f7);
+        drawGirder('girder_orange', 0xf97316);
+        drawGirder('girder_cyan', 0x06b6d4);
+        drawGirder('girder_grey', 0x71717a);
+        drawGirder('girder_pink', 0xec4899);
+        drawGirder('girder_white', 0xf8fafc);
+
+        g.fillStyle(0xfacc15, 1); g.fillRect(0, 0, 20, 16);
+        g.generateTexture('rivet', 20, 16); g.clear();
+
+        g.lineStyle(3, 0x06b6d4, 1);
+        g.beginPath(); g.moveTo(5, 0); g.lineTo(5, 40); g.moveTo(25, 0); g.lineTo(25, 40);
+        g.moveTo(5, 10); g.lineTo(25, 10); g.moveTo(5, 20); g.lineTo(25, 20); g.moveTo(5, 30); g.lineTo(25, 30);
+        g.strokePath();
+        g.generateTexture('ladder', 30, 40); g.clear();
+
+        const drawMario = (key, walk) => {
+            g.fillStyle(0xef4444, 1); g.fillRect(4, 0, 12, 6);
+            g.fillStyle(0xfca5a5, 1); g.fillRect(4, 6, 12, 6);
+            g.fillStyle(0x3b82f6, 1); g.fillRect(4, 12, 12, 8);
+            g.fillStyle(0x8b4513, 1);
+            if (walk === 0) { g.fillRect(2, 20, 6, 4); g.fillRect(12, 20, 6, 4); }
+            else if (walk === 1) { g.fillRect(4, 20, 6, 4); g.fillRect(14, 18, 6, 4); }
+            g.generateTexture(key, 20, 24); g.clear();
+        }
+        drawMario('mario_r1', 0); drawMario('mario_r2', 1);
+        
+        const drawMarioL = (key, walk) => {
+            g.fillStyle(0xef4444, 1); g.fillRect(4, 0, 12, 6);
+            g.fillStyle(0xfca5a5, 1); g.fillRect(4, 6, 12, 6);
+            g.fillStyle(0x3b82f6, 1); g.fillRect(4, 12, 12, 8);
+            g.fillStyle(0x8b4513, 1);
+            if (walk === 0) { g.fillRect(12, 20, 6, 4); g.fillRect(2, 20, 6, 4); }
+            else if (walk === 1) { g.fillRect(10, 20, 6, 4); g.fillRect(0, 18, 6, 4); }
+            g.generateTexture(key, 20, 24); g.clear();
+        }
+        drawMarioL('mario_l1', 0); drawMarioL('mario_l2', 1);
+
+        g.fillStyle(0xef4444, 1); g.fillRect(4, 0, 12, 6);
+        g.fillStyle(0x3b82f6, 1); g.fillRect(4, 6, 12, 12);
+        g.fillStyle(0xffffff, 1); g.fillRect(0, 8, 4, 4); g.fillRect(16, 8, 4, 4);
+        g.fillStyle(0x8b4513, 1); g.fillRect(4, 18, 5, 6); g.fillRect(11, 18, 5, 6);
+        g.generateTexture('mario_c1', 20, 24); g.clear();
+        
+        g.fillStyle(0xef4444, 1); g.fillRect(4, 0, 12, 6);
+        g.fillStyle(0x3b82f6, 1); g.fillRect(4, 6, 12, 12);
+        g.fillStyle(0xffffff, 1); g.fillRect(0, 12, 4, 4); g.fillRect(16, 4, 4, 4); 
+        g.fillStyle(0x8b4513, 1); g.fillRect(4, 16, 5, 6); g.fillRect(11, 20, 5, 6); 
+        g.generateTexture('mario_c2', 20, 24); g.clear();
+
+        g.fillStyle(0x8b4513, 1); g.fillCircle(12, 12, 10);
+        g.lineStyle(2, 0xd4d4d8, 1); g.beginPath(); g.arc(12, 12, 10, 0, Math.PI*2); g.strokePath();
+        g.beginPath(); g.moveTo(2, 12); g.lineTo(22, 12); g.strokePath();
+        g.generateTexture('barrel_1', 24, 24); g.clear();
+
+        g.fillStyle(0x8b4513, 1); g.fillCircle(12, 12, 10);
+        g.lineStyle(2, 0xd4d4d8, 1); g.beginPath(); g.arc(12, 12, 10, 0, Math.PI*2); g.strokePath();
+        g.beginPath(); g.moveTo(12, 2); g.lineTo(12, 22); g.strokePath();
+        g.generateTexture('barrel_2', 24, 24); g.clear();
+
+        g.fillStyle(0x8b4513, 1); g.fillRect(10, 10, 40, 40);
+        g.fillStyle(0xfca5a5, 1); g.fillRect(20, 15, 20, 15);
+        g.fillStyle(0x000000, 1); g.fillRect(24, 20, 4, 4); g.fillRect(32, 20, 4, 4);
+        g.fillStyle(0x8b4513, 1); g.fillRect(0, 20, 10, 30); g.fillRect(50, 20, 10, 30);
+        g.generateTexture('dk_1', 60, 60); g.clear();
+
+        g.fillStyle(0x8b4513, 1); g.fillRect(10, 10, 40, 40); 
+        g.fillStyle(0xfca5a5, 1); g.fillRect(20, 15, 20, 15); 
+        g.fillStyle(0x000000, 1); g.fillRect(24, 20, 4, 4); g.fillRect(32, 20, 4, 4);
+        g.fillStyle(0x8b4513, 1); g.fillRect(0, 0, 10, 30); g.fillRect(50, 0, 10, 30);
+        g.generateTexture('dk_2', 60, 60); g.clear();
+
+        g.fillStyle(0xf472b6, 1); g.fillRect(5, 10, 14, 20);
+        g.fillStyle(0xfca5a5, 1); g.fillRect(8, 0, 8, 10);
+        g.fillStyle(0x000000, 1); g.fillRect(8, 0, 8, 4);
+        g.generateTexture('pauline', 24, 30); g.clear();
+        
+        // Lava
+        g.fillStyle(0xef4444, 1); g.fillRect(0, 0, 40, 16); g.fillStyle(0xfacc15, 1); g.fillRect(5, 0, 10, 5); g.fillRect(25, 5, 10, 5); g.generateTexture('lava_1', 40, 16); g.clear();
+        g.fillStyle(0xef4444, 1); g.fillRect(0, 0, 40, 16); g.fillStyle(0xfacc15, 1); g.fillRect(15, 5, 10, 5); g.fillRect(35, 0, 5, 5); g.generateTexture('lava_2', 40, 16); g.clear();
+        
+        // Conveyor
+        g.fillStyle(0x334155, 1); g.fillRect(0, 0, 40, 16); g.fillStyle(0x94a3b8, 1); g.fillRect(0, 0, 10, 16); g.fillRect(20, 0, 10, 16); g.generateTexture('con_1', 40, 16); g.clear();
+        g.fillStyle(0x334155, 1); g.fillRect(0, 0, 40, 16); g.fillStyle(0x94a3b8, 1); g.fillRect(10, 0, 10, 16); g.fillRect(30, 0, 10, 16); g.generateTexture('con_2', 40, 16); g.clear();
+    }
+
+    function buildStage(scene, lvl) {
+        let stageType = ((lvl - 1) % 10) + 1;
+        currentLevelType = stageType; // Store numeric type
+        
+        const colors = ['red', 'yellow', 'blue', 'green', 'purple', 'orange', 'cyan', 'grey', 'pink', 'white'];
+        let girder = 'girder_' + colors[stageType-1];
+
+        // Base Floor (except on Lava level 6)
+        if (stageType !== 6) {
+            for(let i=0; i<20; i++) platforms.create(20 + i*40, 580, girder).refreshBody();
+        }
+
+        if (stageType === 1) {
+            // Stage 1: Classic 25m (Red)
+            for(let i=0; i<3; i++) ladders.create(700, 560 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, 460 + i*2, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<3; i++) ladders.create(120, 440 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<18; i++) { let p = platforms.create(700 - i*40, 340 + i*2, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<3; i++) ladders.create(680, 320 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, 220 + i*2, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<2; i++) ladders.create(200, 200 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<10; i++) platforms.create(200 + i*40, 140, girder).refreshBody();
+            for(let i=0; i<2; i++) ladders.create(350, 120 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<4; i++) platforms.create(320 + i*40, 90, girder).refreshBody();
+        } 
+        else if (stageType === 2) {
+            // Stage 2: Classic 100m Rivets (Yellow)
+            const buildTier = (y, rX) => {
+                for(let i=0; i<18; i++) { let x = 60 + i*40; if(rX.includes(x)) { rivets.create(x, y, 'rivet').refreshBody(); } else { let p = platforms.create(x, y, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); } }
+            };
+            buildTier(460, [260, 540]);
+            for(let i=0; i<3; i++) { ladders.create(100, 560 - i*40, 'ladder').refreshBody(); ladders.create(700, 560 - i*40, 'ladder').refreshBody(); }
+            buildTier(340, [340, 460]);
+            for(let i=0; i<3; i++) { ladders.create(200, 440 - i*40, 'ladder').refreshBody(); ladders.create(600, 440 - i*40, 'ladder').refreshBody(); }
+            buildTier(220, [300, 500]);
+            for(let i=0; i<3; i++) { ladders.create(300, 320 - i*40, 'ladder').refreshBody(); ladders.create(500, 320 - i*40, 'ladder').refreshBody(); }
+            for(let i=0; i<6; i++) platforms.create(280 + i*40, 100, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(400, 200 - i*40, 'ladder').refreshBody();
+            rivetsRemaining = 6;
+        }
+        else if (stageType === 3) {
+            // Stage 3: The Conveyor Belts (Blue)
+            const buildConveyors = (y, dir) => {
+                for(let i=0; i<16; i++) { 
+                    let c = conveyors.create(100 + i*40, y, 'con_1'); 
+                    c.body.checkCollision.down = c.body.checkCollision.left = c.body.checkCollision.right = false; 
+                    c.refreshBody(); c.play(dir === 'right' ? 'conveyor_r' : 'conveyor_l'); c.conSpeed = dir === 'right' ? 80 : -80; 
+                }
+            };
+            buildConveyors(460, 'right');
+            for(let i=0; i<3; i++) ladders.create(700, 560 - i*40, 'ladder').refreshBody();
+            buildConveyors(340, 'left');
+            for(let i=0; i<3; i++) ladders.create(140, 440 - i*40, 'ladder').refreshBody();
+            buildConveyors(220, 'right');
+            for(let i=0; i<3; i++) ladders.create(660, 320 - i*40, 'ladder').refreshBody();
+            
+            for(let i=0; i<2; i++) ladders.create(200, 200 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<10; i++) platforms.create(200 + i*40, 140, girder).refreshBody();
+            for(let i=0; i<2; i++) ladders.create(350, 120 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<4; i++) platforms.create(320 + i*40, 90, girder).refreshBody();
+        }
+        else if (stageType === 4) {
+            // Stage 4: Elevators (Green)
+            jumpBoost = 100; // Give slightly better jump to help reach elevators
+            for(let i=0; i<4; i++) platforms.create(100 + i*40, 460, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(220, 560 - i*40, 'ladder').refreshBody();
+            
+            // Elevators up/down
+            let e1 = elevators.create(300, 580, girder); e1.setVelocityY(-80); e1.moveRange = [220, 580]; e1.body.checkCollision.down = e1.body.checkCollision.left = e1.body.checkCollision.right = false;
+            let e2 = elevators.create(400, 220, girder); e2.setVelocityY(80); e2.moveRange = [220, 580]; e2.body.checkCollision.down = e2.body.checkCollision.left = e2.body.checkCollision.right = false;
+            let e3 = elevators.create(500, 580, girder); e3.setVelocityY(-120); e3.moveRange = [220, 580]; e3.body.checkCollision.down = e3.body.checkCollision.left = e3.body.checkCollision.right = false;
+
+            for(let i=0; i<6; i++) platforms.create(580 + i*40, 220, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(660, 200 - i*40, 'ladder').refreshBody();
+            
+            for(let i=0; i<12; i++) platforms.create(200 + i*40, 100, girder).refreshBody();
+            for(let i=0; i<2; i++) ladders.create(350, 80 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<4; i++) platforms.create(320 + i*40, 50, girder).refreshBody();
+        }
+        else if (stageType === 5) {
+            // Stage 5: Bouncy Castle (Purple)
+            jumpBoost = 250; // Huge jump boost!
+            
+            for(let i=0; i<18; i++) platforms.create(100 + i*40, 480, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(700, 560 - i*40, 'ladder').refreshBody();
+            
+            // Sparse middle platforms
+            for(let i=0; i<4; i++) platforms.create(200 + i*40, 360, girder).refreshBody();
+            for(let i=0; i<4; i++) platforms.create(500 + i*40, 360, girder).refreshBody();
+            for(let i=0; i<3; i++) { ladders.create(240, 460 - i*40, 'ladder').refreshBody(); ladders.create(600, 460 - i*40, 'ladder').refreshBody(); }
+            
+            for(let i=0; i<14; i++) platforms.create(180 + i*40, 240, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(400, 340 - i*40, 'ladder').refreshBody();
+            
+            for(let i=0; i<6; i++) platforms.create(280 + i*40, 120, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(360, 220 - i*40, 'ladder').refreshBody();
+        }
+        else if (stageType === 6) {
+            // Stage 6: The Lava Pit (Orange)
+            for(let i=0; i<20; i++) { let l = lavas.create(20 + i*40, 580, 'lava_1'); l.play('lava_anim'); } // Real lava over bottom floor
+            
+            // Safe starting block
+            for(let i=0; i<3; i++) platforms.create(60 + i*40, 540, girder).refreshBody();
+            
+            const buildT = (y) => {
+                for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, y, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            }
+            buildT(420);
+            for(let i=0; i<3; i++) ladders.create(100, 520 - i*40, 'ladder').refreshBody(); // Jump to ladder
+            buildT(300);
+            for(let i=0; i<3; i++) ladders.create(700, 400 - i*40, 'ladder').refreshBody();
+            buildT(180);
+            for(let i=0; i<3; i++) ladders.create(140, 280 - i*40, 'ladder').refreshBody();
+            
+            for(let i=0; i<6; i++) platforms.create(280 + i*40, 80, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(400, 160 - i*40, 'ladder').refreshBody();
+        }
+        else if (stageType === 7) {
+            // Stage 7: The Cage (Cyan) - Ladder Maze
+            const buildT = (y) => {
+                for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, y, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            }
+            buildT(460); buildT(340); buildT(220); buildT(100);
+            
+            // A crazy amount of ladders scattered to make a maze where barrels can drop randomly everywhere
+            let ladX = [140, 220, 340, 460, 580, 660];
+            for(let x of ladX) {
+                for(let i=0; i<3; i++) {
+                    ladders.create(x, 560 - i*40, 'ladder').refreshBody();
+                    ladders.create(x, 440 - i*40, 'ladder').refreshBody();
+                    ladders.create(x, 320 - i*40, 'ladder').refreshBody();
+                    ladders.create(x, 200 - i*40, 'ladder').refreshBody();
+                }
+            }
+        }
+        else if (stageType === 8) {
+            // Stage 8: The Void (Grey) - Precision Jumps
+            const buildT = (y, rX) => {
+                for(let i=0; i<18; i++) { 
+                    let x = 60 + i*40; 
+                    if(rX.includes(x)) { let p = platforms.create(x, y, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); } 
+                }
+            };
+            buildT(460, [100, 180, 300, 420, 540, 660, 740]);
+            for(let i=0; i<3; i++) { ladders.create(740, 560 - i*40, 'ladder').refreshBody(); }
+            buildT(340, [100, 220, 340, 460, 580, 740]);
+            for(let i=0; i<3; i++) { ladders.create(100, 440 - i*40, 'ladder').refreshBody(); }
+            buildT(220, [100, 260, 420, 580, 700]);
+            for(let i=0; i<3; i++) { ladders.create(700, 320 - i*40, 'ladder').refreshBody(); }
+            
+            for(let i=0; i<6; i++) platforms.create(280 + i*40, 100, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(400, 200 - i*40, 'ladder').refreshBody();
+        }
+        else if (stageType === 9) {
+            // Stage 9: Zig-Zag Fast (Pink)
+            for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, 460 + i*4, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<3; i++) ladders.create(700, 560 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<18; i++) { let p = platforms.create(700 - i*40, 360 + i*4, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<3; i++) ladders.create(120, 480 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<18; i++) { let p = platforms.create(100 + i*40, 240 + i*4, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); }
+            for(let i=0; i<3; i++) ladders.create(680, 380 - i*40, 'ladder').refreshBody();
+            
+            for(let i=0; i<10; i++) platforms.create(200 + i*40, 120, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(200, 260 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<2; i++) ladders.create(350, 100 - i*40, 'ladder').refreshBody();
+            for(let i=0; i<4; i++) platforms.create(320 + i*40, 70, girder).refreshBody();
+        }
+        else if (stageType === 10) {
+            // Stage 10: The Core (White) - 10 Rivets + Conveyors
+            const buildTier = (y, rX) => {
+                for(let i=0; i<18; i++) { let x = 60 + i*40; if(rX.includes(x)) { rivets.create(x, y, 'rivet').refreshBody(); } else { let p = platforms.create(x, y, girder); p.body.checkCollision.down = p.body.checkCollision.left = p.body.checkCollision.right = false; p.refreshBody(); } }
+            };
+            buildTier(460, [180, 300, 500, 620]);
+            for(let i=0; i<3; i++) { ladders.create(100, 560 - i*40, 'ladder').refreshBody(); ladders.create(700, 560 - i*40, 'ladder').refreshBody(); }
+            buildTier(340, [260, 420, 540]);
+            for(let i=0; i<3; i++) { ladders.create(220, 440 - i*40, 'ladder').refreshBody(); ladders.create(580, 440 - i*40, 'ladder').refreshBody(); }
+            buildTier(220, [340, 460, 500]);
+            for(let i=0; i<3; i++) { ladders.create(300, 320 - i*40, 'ladder').refreshBody(); ladders.create(500, 320 - i*40, 'ladder').refreshBody(); }
+            for(let i=0; i<6; i++) platforms.create(280 + i*40, 100, girder).refreshBody();
+            for(let i=0; i<3; i++) ladders.create(400, 200 - i*40, 'ladder').refreshBody();
+            rivetsRemaining = 10;
+            
+            // Add a fast conveyor at the bottom
+            for(let i=0; i<10; i++) { 
+                let c = conveyors.create(220 + i*40, 580, 'con_1'); 
+                c.body.checkCollision.down = c.body.checkCollision.left = c.body.checkCollision.right = false; 
+                c.refreshBody(); c.play('conveyor_r'); c.conSpeed = 120; 
+            }
+        }
+    }
+
+    function startLevel(lvl) {
+        platforms.clear(true, true);
+        ladders.clear(true, true);
+        barrels.clear(true, true);
+        rivets.clear(true, true);
+        conveyors.clear(true, true);
+        lavas.clear(true, true);
+        elevators.clear(true, true);
+        jumpBoost = 0;
+
+        buildStage(this, lvl);
+
+        player.setPosition(100, 550);
+        player.setVelocity(0, 0);
+        player.clearTint();
+        playerClimbing = false;
+        player.body.setAllowGravity(true);
+        isLevelClear = false;
+
+        document.getElementById('level-text').innerText = level;
+        
+        const intro = document.getElementById('level-intro');
+        intro.innerHTML = `HOW HIGH CAN YOU GET?<br><span style="font-size:30px; color:#fff">STAGE ${lvl}</span>`;
+        intro.style.display = 'block';
+        
+        if (barrelTimer) barrelTimer.remove();
+        
+        this.time.delayedCall(3000, () => {
+            intro.style.display = 'none';
+            // Scale barrel speed and spawn rate aggressively!
+            let delay = Math.max(800, 3500 - (level * 250));
+            // Stage 9 throws twice as fast!
+            if (currentLevelType === 9) delay = delay / 2;
+            barrelTimer = this.time.addEvent({ delay: delay, callback: spawnBarrel, callbackScope: this, loop: true });
+        });
+    }
+
+    function spawnBarrel() {
+        // No barrels on rivet stages
+        if (isGameOver || isLevelClear || [2,10].includes(currentLevelType)) return;
+
+        let b = barrels.create(200, 120, 'barrel_1');
+        b.setCircle(10);
+        b.setBounce(0.2);
+        b.setVelocityX(120 + (level * 15));
+        b.play('barrel_roll');
+        b.fallingDownLadder = false;
+    }
+
+    function handleLadderOverlap(p, ladder) {
+        currentLadder = ladder;
+        
+        let up = cursors.up.isDown || mobileControls.up || this.input.keyboard.keys[87]?.isDown;
+        let down = cursors.down.isDown || mobileControls.down || this.input.keyboard.keys[83]?.isDown;
+
+        if ((up || down) && !playerClimbing && Math.abs(player.x - ladder.x) < 15) {
+            player.x = ladder.x;
+            player.setVelocityX(0);
+            playerClimbing = true;
+            player.body.setAllowGravity(false);
+        }
+    }
+
+    function collectRivet(p, rivet) {
+        rivet.destroy();
+        addScore(100);
+        rivetsRemaining--;
+        if (rivetsRemaining <= 0 && !isLevelClear) {
+            winLevel.call(this);
+        }
+    }
+
+    function hitHazard(p, b) {
+        if (isGameOver || isLevelClear) return;
+        
+        lives--;
+        document.getElementById('lives-text').innerText = lives;
+        barrelTimer.remove();
+        
+        p.setTint(0xff0000);
+        p.body.enable = false;
+
+        if (lives <= 0) {
+            isGameOver = true;
+            document.getElementById('game-over').style.display = 'flex';
+        } else {
+            this.time.delayedCall(2000, () => {
+                startLevel.call(this, level);
+                p.body.enable = true;
+            });
+        }
+    }
+
+    function winLevel() {
+        isLevelClear = true;
+        barrelTimer.remove();
+        addScore(1000 * level);
+        
+        let txt = this.add.text(GAME_WIDTH/2, GAME_HEIGHT/2, "STAGE CLEAR!", { fontSize: '40px', fill: '#facc15', fontStyle: 'bold' }).setOrigin(0.5).setDepth(100);
+        
+        this.time.delayedCall(3000, () => {
+            txt.destroy();
+            level++;
+            startLevel.call(this, level);
+        });
+    }
+
+    function addScore(v) {
+        score += v;
+        document.getElementById('score-text').innerText = score.toString().padStart(6, '0');
+    }
+
+    window.resetGame = () => {
+        score = 0; lives = 3; level = 1;
+        document.getElementById('score-text').innerText = "000000";
+        document.getElementById('lives-text').innerText = "3";
+        document.getElementById('game-over').style.display = 'none';
+        isGameOver = false;
+        player.body.enable = true;
+        startLevel.call(game.scene.scenes[0], level);
+    }
+
+    function update(time, delta) {
+        if (isGameOver || isLevelClear || document.getElementById('level-intro').style.display === 'block') return;
+
+        let left = cursors.left.isDown || mobileControls.left || this.input.keyboard.keys[65]?.isDown;
+        let right = cursors.right.isDown || mobileControls.right || this.input.keyboard.keys[68]?.isDown;
+        let up = cursors.up.isDown || mobileControls.up || this.input.keyboard.keys[87]?.isDown;
+        let down = cursors.down.isDown || mobileControls.down || this.input.keyboard.keys[83]?.isDown;
+        let jump = cursors.space.isDown || mobileControls.jump;
+
+        let speed = 150;
+        let pVelocityX = 0;
+
+        if (playerClimbing && !this.physics.overlap(player, ladders)) {
+            playerClimbing = false;
+            player.body.setAllowGravity(true);
+        }
+
+        if (playerClimbing) {
+            player.setVelocityX(0);
+            if (up) { player.setVelocityY(-100); player.play('climb', true); }
+            else if (down) { player.setVelocityY(100); player.play('climb', true); }
+            else { player.setVelocityY(0); player.anims.pause(); }
+
+            if (left) { player.x -= 2; playerClimbing = false; player.body.setAllowGravity(true); }
+            else if (right) { player.x += 2; playerClimbing = false; player.body.setAllowGravity(true); }
+        } else {
+            if (left) { pVelocityX = -speed; player.play('run_l', true); }
+            else if (right) { pVelocityX = speed; player.play('run_r', true); }
+            else { player.anims.stop(); player.setTexture(player.body.velocity.x > 0 ? 'mario_r1' : 'mario_l1'); }
+
+            // Conveyor Belt pushing logic
+            if (player.body.touching.down) {
+                let isOnConveyor = false;
+                conveyors.children.iterate(c => {
+                    if (c && c.body && this.physics.overlap(player, c)) {
+                        pVelocityX += c.conSpeed;
+                        isOnConveyor = true;
+                    }
+                });
+            }
+
+            player.setVelocityX(pVelocityX);
+
+            if (jump && player.body.touching.down) {
+                player.setVelocityY(-450 - jumpBoost);
+                addScore(10);
+            }
+        }
+
+        // Elevators movement
+        elevators.children.iterate(e => {
+            if (e && e.body) {
+                if (e.y < e.moveRange[0]) e.setVelocityY(Math.abs(e.body.velocity.y));
+                else if (e.y > e.moveRange[1]) e.setVelocityY(-Math.abs(e.body.velocity.y));
+            }
+        });
+
+        barrels.children.iterate(b => {
+            if (b && b.body) {
+                if (b.body.blocked.left) b.setVelocityX(100 + (level*10));
+                else if (b.body.blocked.right) b.setVelocityX(-100 - (level*10));
+                
+                if (b.body.velocity.x > 0 && b.body.touching.down) b.setVelocityX(100 + (level*10));
+                if (b.body.velocity.x < 0 && b.body.touching.down) b.setVelocityX(-100 - (level*10));
+
+                if (b.y > GAME_HEIGHT) { b.destroy(); addScore(50); }
+            }
+        });
+
+        // Win Condition for non-rivet stages (Reach Pauline)
+        if (![2,4,6,8,10].includes(currentLevelType) && player.y < 120 && player.x > 300 && player.x < 400) {
+            winLevel.call(this);
+        }
+    }
+
+    function createMobileControls(scene) {
+        const w = scene.scale.width;
+        const h = scene.scale.height;
+        const s = { fontSize: '32px', fill: '#fff', backgroundColor: 'rgba(255,255,255,0.2)', padding: {x:20, y:20} };
+        
+        let cLeft = scene.add.text(40, h - 100, '⬅️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+        let cRight = scene.add.text(160, h - 100, '➡️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+        let cUp = scene.add.text(100, h - 180, '⬆️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+        let cDown = scene.add.text(100, h - 20, '⬇️', s).setInteractive().setScrollFactor(0).setDepth(2000);
+        let cJump = scene.add.text(w - 150, h - 100, 'JUMP', s).setInteractive().setScrollFactor(0).setDepth(2000);
+        
+        cLeft.on('pointerdown', () => mobileControls.left=true); cLeft.on('pointerup', () => mobileControls.left=false); cLeft.on('pointerout', () => mobileControls.left=false);
+        cRight.on('pointerdown', () => mobileControls.right=true); cRight.on('pointerup', () => mobileControls.right=false); cRight.on('pointerout', () => mobileControls.right=false);
+        cUp.on('pointerdown', () => mobileControls.up=true); cUp.on('pointerup', () => mobileControls.up=false); cUp.on('pointerout', () => mobileControls.up=false);
+        cDown.on('pointerdown', () => mobileControls.down=true); cDown.on('pointerup', () => mobileControls.down=false); cDown.on('pointerout', () => mobileControls.down=false);
+        cJump.on('pointerdown', () => mobileControls.jump=true); cJump.on('pointerup', () => mobileControls.jump=false); cJump.on('pointerout', () => mobileControls.jump=false);
+
+        scene.scale.on('resize', (gameSize) => {
+            const h = gameSize.height; const w = gameSize.width;
+            cLeft.setPosition(40, h - 100); cRight.setPosition(160, h - 100);
+            cUp.setPosition(100, h - 180); cDown.setPosition(100, h - 20);
+            cJump.setPosition(w - 150, h - 100);
+        });
+    }
+    </script>
+</body>
+</html>

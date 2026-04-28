@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pool (Python Port) - Pro Elite</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #323232; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #game-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        .back-to-hub { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.7); color: white; border: 2px solid #3b82f6; padding: 8px 15px; border-radius: 20px; cursor: pointer; z-index: 1000; text-decoration: none; font-size: 14px; font-weight: bold; transition: all 0.2s; }
+        .back-to-hub:hover { background: #3b82f6; color: #fff; }
+        
+        #assets-loading { display: none; }
+        
+        #rotate-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e293b, #0f172a); color: white; display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000; text-align: center;
+        }
+        #rotate-overlay .icon { font-size: 80px; margin-bottom: 20px; animation: rotateAnim 2s infinite; }
+        @keyframes rotateAnim { 0% { transform: rotate(0deg); } 50% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+        @media screen and (orientation: portrait) { #rotate-overlay { display: flex; } }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Back to Hub</a>
+    
+    <div id="rotate-overlay">
+        <div class="icon">🎱🔄</div>
+        <h2>ROTATE YOUR DEVICE</h2>
+        <p>Please switch to Landscape Mode for the table</p>
+    </div>
+
+    <!-- Direct Image Injection to bypass CORS blocks -->
+    <div id="assets-loading">
+        <img src="pool_game_python_dep/images/table.png" id="img_table">
+        <img src="pool_game_python_dep/images/cue.png" id="img_cue">
+        <img src="pool_game_python_dep/images/ball_1.png" id="img_ball_1">
+        <img src="pool_game_python_dep/images/ball_2.png" id="img_ball_2">
+        <img src="pool_game_python_dep/images/ball_3.png" id="img_ball_3">
+        <img src="pool_game_python_dep/images/ball_4.png" id="img_ball_4">
+        <img src="pool_game_python_dep/images/ball_5.png" id="img_ball_5">
+        <img src="pool_game_python_dep/images/ball_6.png" id="img_ball_6">
+        <img src="pool_game_python_dep/images/ball_7.png" id="img_ball_7">
+        <img src="pool_game_python_dep/images/ball_8.png" id="img_ball_8">
+        <img src="pool_game_python_dep/images/ball_9.png" id="img_ball_9">
+        <img src="pool_game_python_dep/images/ball_10.png" id="img_ball_10">
+        <img src="pool_game_python_dep/images/ball_11.png" id="img_ball_11">
+        <img src="pool_game_python_dep/images/ball_12.png" id="img_ball_12">
+        <img src="pool_game_python_dep/images/ball_13.png" id="img_ball_13">
+        <img src="pool_game_python_dep/images/ball_14.png" id="img_ball_14">
+        <img src="pool_game_python_dep/images/ball_15.png" id="img_ball_15">
+        <img src="pool_game_python_dep/images/ball_16.png" id="img_ball_16">
+    </div>
+
+    <div id="game-container"></div>
+
+    <script>
+    const GAME_WIDTH = 1200;
+    const GAME_HEIGHT = 678;
+    const BOTTOM_PANEL = 50;
+    const BALL_RADIUS = 18;
+
+    const config = {
+        type: Phaser.CANVAS,
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT + BOTTOM_PANEL,
+        parent: 'game-container',
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        backgroundColor: '#323232',
+        physics: {
+            default: 'matter',
+            matter: {
+                gravity: { x: 0, y: 0 },
+                enableSleeping: true,
+                debug: false,
+                runner: { fps: 120, deltaMin: 1000/120, deltaMax: 1000/60 }
+            }
+        },
+        scene: { create: create, update: update }
+    };
+
+    const game = new Phaser.Game(config);
+
+    let cueBall, balls = [], pockets = [];
+    let cueStick, line;
+    let isAiming = false;
+    let turnState = 'AIMING';
+    let lives = 3;
+    let pottedBalls = [];
+    let livesText, overText;
+    let gameRunning = true;
+
+    // Power
+    let poweringUp = false;
+    let force = 0;
+    let forceDirection = 1;
+    const MAX_FORCE = 10000 / 150; 
+    const FORCE_STEP = 100 / 150;
+    let cueAngle = 0;
+    let powerBarGraphics;
+
+    function create() {
+        // --- Texture Injection ---
+        const addTex = (key, id) => {
+            const img = document.getElementById(id);
+            if (img) this.textures.addImage(key, img);
+        };
+        addTex('table', 'img_table');
+        addTex('cue', 'img_cue');
+        for(let i=1; i<=16; i++) addTex(`ball_${i}`, `img_ball_${i}`);
+
+        // Table
+        this.add.image(0, 0, 'table').setOrigin(0, 0);
+
+        // Physics Properties
+        const ballOptions = {
+            friction: 0.005,
+            frictionAir: 0.015,
+            restitution: 0.9,
+            density: 0.002,
+            label: 'ball'
+        };
+
+        const cushionOptions = { 
+            isStatic: true, 
+            restitution: 0.9, 
+            friction: 0.01, 
+            label: 'cushion' 
+        };
+
+        // Stable Rectangular Cushions based on table image
+        this.matter.add.rectangle(326, 66, 476, 30, cushionOptions); // Top Left
+        this.matter.add.rectangle(861, 66, 481, 30, cushionOptions); // Top Right
+        this.matter.add.rectangle(326, 610, 476, 30, cushionOptions); // Bottom Left
+        this.matter.add.rectangle(861, 610, 481, 30, cushionOptions); // Bottom Right
+        this.matter.add.rectangle(66, 338, 30, 485, cushionOptions); // Left
+        this.matter.add.rectangle(1132, 338, 30, 485, cushionOptions); // Right
+
+        // Pockets
+        const POCKET_POSITIONS = [{x: 55, y: 63}, {x: 592, y: 48}, {x: 1134, y: 64}, {x: 55, y: 616}, {x: 592, y: 629}, {x: 1134, y: 616}];
+        POCKET_POSITIONS.forEach(pos => {
+            this.matter.add.circle(pos.x, pos.y, 35, { isSensor: true, isStatic: true, label: 'pocket' });
+        });
+
+        // Rack the balls (Python sequence)
+        let rows = 5;
+        let bIdx = 1;
+        for (let col = 0; col < 5; col++) {
+            for (let row = 0; row < rows; row++) {
+                let x = 250 + col * (BALL_RADIUS * 2 + 1);
+                let y = 267 + row * (BALL_RADIUS * 2 + 1) + col * BALL_RADIUS;
+                let b = this.matter.add.sprite(x, y, `ball_${bIdx}`);
+                b.setCircle(BALL_RADIUS, ballOptions); // Critical fix: apply options here
+                b.ballNum = bIdx;
+                b.setDepth(5);
+                balls.push(b);
+                bIdx++;
+            }
+            rows--;
+        }
+
+        // Cue ball (ball 16)
+        cueBall = this.matter.add.sprite(888, GAME_HEIGHT / 2, 'ball_16');
+        cueBall.setCircle(BALL_RADIUS, ballOptions); // Critical fix: apply options here
+        cueBall.ballNum = 16;
+        cueBall.setDepth(5);
+        balls.push(cueBall);
+
+        // Interaction Objects
+        cueStick = this.add.image(cueBall.x, cueBall.y, 'cue').setOrigin(1.02, 0.5).setDepth(10).setVisible(false);
+        powerBarGraphics = this.add.graphics().setDepth(20);
+        line = this.add.graphics().setDepth(4);
+
+        // Inputs
+        this.input.on('pointerdown', (p) => {
+            if (turnState === 'AIMING' && gameRunning) {
+                poweringUp = true;
+                force = 0;
+                forceDirection = 1;
+            }
+        });
+
+        this.input.on('pointermove', (p) => {
+            if (turnState === 'AIMING' && gameRunning && !poweringUp) {
+                cueAngle = Phaser.Math.Angle.Between(p.x, p.y, cueBall.x, cueBall.y);
+                cueStick.setVisible(true).setPosition(cueBall.x, cueBall.y).setRotation(cueAngle);
+                
+                line.clear().lineStyle(1, 0xffffff, 0.2);
+                line.beginPath().moveTo(cueBall.x, cueBall.y)
+                    .lineTo(cueBall.x + Math.cos(cueAngle)*600, cueBall.y + Math.sin(cueAngle)*600).strokePath();
+            }
+        });
+
+        this.input.on('pointerup', (p) => {
+            if (poweringUp && gameRunning) {
+                poweringUp = false;
+                fireShot();
+            }
+        });
+
+        // Collisions
+        this.matter.world.on('collisionstart', (e) => {
+            e.pairs.forEach(pair => {
+                if (pair.bodyA.label === 'pocket' || pair.bodyB.label === 'pocket') {
+                    const b = pair.bodyA.label === 'pocket' ? pair.bodyB.gameObject : pair.bodyA.gameObject;
+                    if (b && b.ballNum !== undefined) pocketBall(b, this);
+                }
+            });
+        });
+
+        // UI Panel
+        this.add.rectangle(0, GAME_HEIGHT, GAME_WIDTH, BOTTOM_PANEL, 0x1a1a1a).setOrigin(0, 0).setDepth(15);
+        livesText = this.add.text(GAME_WIDTH - 200, GAME_HEIGHT + 10, 'LIVES: 3', { fontSize: '28px', fill: '#fff', fontStyle: 'bold' }).setDepth(20);
+        overText = this.add.text(GAME_WIDTH/2, GAME_HEIGHT/2, '', { fontSize: '80px', fill: '#fff', fontStyle: 'bold', stroke: '#000', strokeThickness: 10 }).setOrigin(0.5).setDepth(100);
+    }
+
+    function fireShot() {
+        const powerScale = 0.004; // Adjusted to provide a realistic, firm strike
+        cueBall.applyForce({ x: Math.cos(cueAngle) * force * powerScale, y: Math.sin(cueAngle) * force * powerScale });
+        cueStick.setVisible(false);
+        line.clear();
+        turnState = 'MOVING';
+    }
+
+    function pocketBall(ball, scene) {
+        if (ball.ballNum === 16) {
+            setTimeout(() => { 
+                ball.setPosition(888, GAME_HEIGHT / 2); 
+                ball.setVelocity(0,0); 
+                ball.setAngularVelocity(0); 
+                turnState = 'AIMING';
+            }, 800);
+            lives--;
+            livesText.setText(`LIVES: ${lives}`);
+            if (lives <= 0) { gameRunning = false; overText.setText('GAME OVER'); }
+        } else {
+            pottedBalls.push(ball.ballNum);
+            scene.add.image(25 + (pottedBalls.length - 1) * 45, GAME_HEIGHT + 25, `ball_${ball.ballNum}`).setScale(0.7).setDepth(20);
+            ball.destroy();
+            balls = balls.filter(b => b !== ball);
+
+            if (balls.length === 1 && balls[0].ballNum === 16) {
+                gameRunning = false; overText.setText('YOU WIN!');
+            }
+        }
+    }
+
+    function update() {
+        if (!gameRunning) return;
+
+        if (poweringUp) {
+            force += FORCE_STEP * forceDirection;
+            if (force >= MAX_FORCE || force <= 0) forceDirection *= -1;
+            
+            powerBarGraphics.clear();
+            powerBarGraphics.fillStyle(0xff0000, 0.8);
+            let bars = Math.ceil(force / (MAX_FORCE/15));
+            for (let i = 0; i < bars; i++) {
+                powerBarGraphics.fillRect(cueBall.x - 70 + i * 10, cueBall.y + 40, 8, 15);
+            }
+        }
+
+        if (turnState === 'MOVING') {
+            let stillMoving = false;
+            if (cueBall.active && cueBall.body.speed > 0.15) stillMoving = true;
+            balls.forEach(b => { if(b.active && b.body.speed > 0.15) stillMoving = true; });
+
+            if (!stillMoving) {
+                turnState = 'AIMING';
+                cueStick.setVisible(true).setPosition(cueBall.x, cueBall.y);
+            }
+        } else if (turnState === 'AIMING' && !poweringUp) {
+            cueStick.setPosition(cueBall.x, cueBall.y);
+        }
+    }
+    </script>
+</body>
+</html>
