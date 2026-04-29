@@ -1,1 +1,0 @@
-webpack --watch ./libs/main.js -o ./src/bundle.js --mode=development
