@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Alphabet Tracing - Kids Learning</title>
+    <style>
+        :root {
+            --primary: #FF6B6B;
+            --secondary: #4ECDC4;
+            --accent: #FFE66D;
+            --bg: #F7FFF7;
+            --text: #2F2F2F;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Segoe UI', sans-serif;
+            background: var(--bg);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .back-to-hub {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary);
+            border: 3px solid var(--primary);
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            z-index: 2000;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .back-to-hub:active { transform: scale(0.9); }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background-size: cover;
+            background-position: center;
+        }
+        .active-screen { display: flex; }
+
+        /* Menu Screen */
+        #menu-screen {
+            background: linear-gradient(135deg, #FF9A9E 0%, #FAD0C4 99%, #FAD0C4 100%);
+            overflow-y: auto;
+            padding: 80px 20px 40px;
+            box-sizing: border-box;
+        }
+        #menu-screen h1 {
+            font-size: 48px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .alphabet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+        }
+        .letter-card {
+            aspect-ratio: 1;
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            font-weight: bold;
+            color: var(--primary);
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            border: 4px solid transparent;
+        }
+        .letter-card:active { transform: scale(0.9); }
+        .letter-card:hover { border-color: var(--secondary); }
+
+        /* Tracing Screen */
+        #tracing-screen {
+            background: #fff;
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 120px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #template-canvas {
+            z-index: 1;
+            opacity: 0.15;
+        }
+        #drawing-canvas {
+            z-index: 2;
+        }
+
+        .tracing-ui {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .btn {
+            background: white;
+            border: 3px solid #eee;
+            width: 50px;
+            height: 50px;
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn:active { transform: scale(0.9); }
+
+        .bottom-bar {
+            width: 100%;
+            height: 120px;
+            background: #f8f9fa;
+            border-top: 4px solid #eee;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 1000;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px;
+        }
+        .color-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        .color-circle.active {
+            transform: scale(1.2);
+            border-color: #333;
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .nav-btn {
+            font-size: 40px;
+            cursor: pointer;
+            color: var(--primary);
+        }
+        .current-letter-display {
+            font-size: 60px;
+            font-weight: bold;
+            color: var(--secondary);
+        }
+
+        /* Confetti */
+        #confetti-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 3000;
+        }
+
+        @media (max-width: 600px) {
+            #menu-screen h1 { font-size: 32px; }
+            .alphabet-grid { grid-template-columns: repeat(4, 1fr); }
+            .letter-card { font-size: 30px; }
+            .bottom-bar { height: 100px; padding: 0 10px; }
+            .current-letter-display { font-size: 40px; }
+            .nav-btn { font-size: 30px; }
+            .color-circle { width: 30px; height: 30px; }
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+
+    <!-- MENU SCREEN -->
+    <div id="menu-screen" class="screen active-screen">
+        <h1>Alphabet Tracing</h1>
+        <div class="alphabet-grid" id="alphabet-grid">
+            <!-- Letters A-Z will be injected here -->
+        </div>
+    </div>
+
+    <!-- TRACING SCREEN -->
+    <div id="tracing-screen" class="screen">
+        <div class="tracing-ui">
+            <div class="btn" onclick="speakLetter()" title="Listen">🔊</div>
+            <div class="btn" onclick="clearCanvas()" title="Clear">🗑️</div>
+            <div class="btn" onclick="closeTracing()" title="Menu">❌</div>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="template-canvas"></canvas>
+            <canvas id="drawing-canvas"></canvas>
+        </div>
+
+        <div class="bottom-bar">
+            <div class="nav-controls">
+                <div class="nav-btn" onclick="prevLetter()">⬅️</div>
+                <div class="current-letter-display" id="current-letter">A</div>
+                <div class="nav-btn" onclick="nextLetter()">➡️</div>
+            </div>
+            
+            <div class="color-picker" id="color-picker">
+                <!-- Colors injected here -->
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <script>
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        let currentLetterIndex = 0;
+        const alphabetGrid = document.getElementById('alphabet-grid');
+        const menuScreen = document.getElementById('menu-screen');
+        const tracingScreen = document.getElementById('tracing-screen');
+        const currentLetterDisplay = document.getElementById('current-letter');
+        
+        const templateCanvas = document.getElementById('template-canvas');
+        const templateCtx = templateCanvas.getContext('2d');
+        const drawingCanvas = document.getElementById('drawing-canvas');
+        const drawingCtx = drawingCanvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvas-container');
+
+        const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#FF9F1C', '#E71D36', '#2EC4B6', '#7209B7'];
+        let currentColor = colors[0];
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Initialize Menu
+        letters.forEach((letter, index) => {
+            const card = document.createElement('div');
+            card.className = 'letter-card';
+            card.innerText = letter;
+            card.onclick = () => startTracing(index);
+            alphabetGrid.appendChild(card);
+        });
+
+        // Initialize Colors
+        const colorPicker = document.getElementById('color-picker');
+        colors.forEach((color, index) => {
+            const circle = document.createElement('div');
+            circle.className = 'color-circle' + (index === 0 ? ' active' : '');
+            circle.style.backgroundColor = color;
+            circle.onclick = () => {
+                currentColor = color;
+                document.querySelectorAll('.color-circle').forEach(c => c.classList.remove('active'));
+                circle.classList.add('active');
+            };
+            colorPicker.appendChild(circle);
+        });
+
+        function resizeCanvas() {
+            const w = canvasContainer.clientWidth;
+            const h = canvasContainer.clientHeight;
+            
+            templateCanvas.width = w;
+            templateCanvas.height = h;
+            drawingCanvas.width = w;
+            drawingCanvas.height = h;
+            
+            drawTemplate();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function startTracing(index) {
+            currentLetterIndex = index;
+            menuScreen.classList.remove('active-screen');
+            tracingScreen.classList.add('active-screen');
+            currentLetterDisplay.innerText = letters[currentLetterIndex];
+            resizeCanvas();
+            clearCanvas();
+        }
+
+        function closeTracing() {
+            tracingScreen.classList.remove('active-screen');
+            menuScreen.classList.add('active-screen');
+        }
+
+        function drawTemplate() {
+            const letter = letters[currentLetterIndex];
+            const w = templateCanvas.width;
+            const h = templateCanvas.height;
+            
+            templateCtx.clearRect(0, 0, w, h);
+            templateCtx.fillStyle = '#000';
+            templateCtx.font = `bold ${Math.min(w, h) * 0.8}px Arial`;
+            templateCtx.textAlign = 'center';
+            templateCtx.textBaseline = 'middle';
+            templateCtx.fillText(letter, w / 2, h / 2);
+        }
+
+        function clearCanvas() {
+            drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        }
+
+        function prevLetter() {
+            currentLetterIndex = (currentLetterIndex - 1 + letters.length) % letters.length;
+            updateTracing();
+        }
+
+        function nextLetter() {
+            currentLetterIndex = (currentLetterIndex + 1) % letters.length;
+            updateTracing();
+        }
+
+        function updateTracing() {
+            currentLetterDisplay.innerText = letters[currentLetterIndex];
+            drawTemplate();
+            clearCanvas();
+            speakLetter();
+        }
+
+        function speakLetter() {
+            const letter = letters[currentLetterIndex];
+            const utterance = new SpeechSynthesisUtterance(letter);
+            utterance.rate = 0.8;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Drawing Logic
+        function getPos(e) {
+            const rect = drawingCanvas.getBoundingClientRect();
+            let x, y;
+            if (e.touches) {
+                x = e.touches[0].clientX - rect.left;
+                y = e.touches[0].clientY - rect.top;
+            } else {
+                x = e.clientX - rect.left;
+                y = e.clientY - rect.top;
+            }
+            return { x, y };
+        }
+
+        function startDraw(e) {
+            isDrawing = true;
+            const pos = getPos(e);
+            lastX = pos.x;
+            lastY = pos.y;
+            draw(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const pos = getPos(e);
+            
+            drawingCtx.beginPath();
+            drawingCtx.strokeStyle = currentColor;
+            drawingCtx.lineWidth = 20;
+            drawingCtx.lineCap = 'round';
+            drawingCtx.lineJoin = 'round';
+            drawingCtx.moveTo(lastX, lastY);
+            drawingCtx.lineTo(pos.x, pos.y);
+            drawingCtx.stroke();
+            
+            lastX = pos.x;
+            lastY = pos.y;
+        }
+
+        function stopDraw() {
+            isDrawing = false;
+        }
+
+        drawingCanvas.addEventListener('mousedown', startDraw);
+        drawingCanvas.addEventListener('mousemove', draw);
+        drawingCanvas.addEventListener('mouseup', stopDraw);
+        drawingCanvas.addEventListener('mouseleave', stopDraw);
+
+        drawingCanvas.addEventListener('touchstart', startDraw, { passive: false });
+        drawingCanvas.addEventListener('touchmove', draw, { passive: false });
+        drawingCanvas.addEventListener('touchend', stopDraw);
+
+    </script>
+</body>
+</html>

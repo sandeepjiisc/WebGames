@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Complete Picture Puzzle - Kids Games</title>
+    <style>
+        :root {
+            --primary: #FF6B6B;
+            --secondary: #4ECDC4;
+            --accent: #FFE66D;
+            --bg: #F0F2F5;
+            --text: #2F2F2F;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Segoe UI', sans-serif;
+            background: var(--bg);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .back-to-hub {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--primary);
+            border: 3px solid var(--primary);
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            z-index: 2000;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .back-to-hub:active { transform: scale(0.9); }
+
+        .screen {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 60px 20px;
+            box-sizing: border-box;
+        }
+        .active-screen { display: flex; }
+
+        #menu-screen {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        h1 {
+            font-size: 48px;
+            color: #ff4757;
+            text-shadow: 2px 2px 0 #fff;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 800px;
+        }
+        .level-card {
+            aspect-ratio: 1;
+            background: white;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            border: 5px solid white;
+        }
+        .level-card:hover { transform: translateY(-5px); border-color: var(--secondary); }
+        .level-card.completed { background: #e3fcef; border-color: #2ed573; }
+        .level-number { font-size: 14px; font-weight: bold; color: #999; margin-top: 5px; }
+
+        #game-screen { background: #fff; }
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 10px;
+            width: 320px;
+            height: 320px;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .puzzle-piece {
+            width: 150px;
+            height: 150px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: grab;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+            z-index: 1;
+        }
+        .puzzle-piece.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            transform: scale(1.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            z-index: 1000 !important;
+        }
+        .puzzle-piece.over {
+            box-shadow: inset 0 0 0 5px var(--secondary);
+        }
+
+        .piece-inner {
+            font-size: 280px;
+            line-height: 1;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        /* Piece offsets for 2x2 grid based on their original values (0,1,2,3) */
+        .piece-0 .piece-inner { left: 10px; top: 10px; }
+        .piece-1 .piece-inner { left: -140px; top: 10px; }
+        .piece-2 .piece-inner { left: 10px; top: -140px; }
+        .piece-3 .piece-inner { left: -140px; top: -140px; }
+
+        .celebration {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 3000;
+            pointer-events: none;
+            display: none;
+            text-align: center;
+        }
+        .celebration h2 { font-size: 80px; color: var(--primary); margin: 0; }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 32px; }
+            .puzzle-container { width: 280px; height: 280px; }
+            .puzzle-piece { width: 130px; height: 130px; }
+            .piece-1 .piece-inner { left: -120px; }
+            .piece-2 .piece-inner { top: -120px; }
+            .piece-3 .piece-inner { left: -120px; top: -120px; }
+            .piece-inner { font-size: 240px; }
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub">🏠 Hub</a>
+
+    <div id="menu-screen" class="screen active-screen">
+        <h1>Complete Picture Puzzle</h1>
+        <div class="level-grid" id="level-grid"></div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="game-header">
+            <button class="btn" onclick="goToMenu()">⬅️ Menu</button>
+            <div style="font-size: 24px; font-weight: bold; color: var(--primary)">Level <span id="level-num">1</span></div>
+            <button class="btn" style="background:var(--secondary)" onclick="shuffleCurrent()">🔄 Shuffle</button>
+        </div>
+        
+        <div class="puzzle-container" id="puzzle-container">
+            <!-- Pieces injected here -->
+        </div>
+
+        <div id="hint-image" style="margin-top: 30px; font-size: 40px; opacity: 0.5;">
+            Hint: <span>⭐</span>
+        </div>
+        <p style="margin-top: 10px; color: #888;">Drag and drop to swap pieces!</p>
+    </div>
+
+    <div id="celebration" class="celebration">
+        <h2>AWESOME!</h2>
+        <div style="font-size: 100px;">🎉</div>
+    </div>
+
+    <script>
+        const puzzles = [
+            "⭐", "🏠", "🐶", "🐱", "🐘", "🦁", "🐵", "🐼", "🐸", "🐦",
+            "🐟", "🦋", "☀️", "🌙", "🌈", "🌸", "🌳", "🍎", "🍌", "🍇",
+            "🍕", "🍰", "🚀", "🚗", "🚂", "✈️", "⛵", "🤖", "🧸", "🎈",
+            "🅰️", "🅱️", "🅾️", "🅿️", "🔤"
+        ];
+
+        let currentLevel = 0;
+        let pieces = [0, 1, 2, 3];
+        let completedLevels = JSON.parse(localStorage.getItem('completedLevels') || '[]');
+
+        const levelGrid = document.getElementById('level-grid');
+        const puzzleContainer = document.getElementById('puzzle-container');
+        const levelNumDisplay = document.getElementById('level-num');
+        const hintDisplay = document.querySelector('#hint-image span');
+
+        function initMenu() {
+            levelGrid.innerHTML = '';
+            puzzles.forEach((emoji, i) => {
+                const card = document.createElement('div');
+                card.className = 'level-card' + (completedLevels.includes(i) ? ' completed' : '');
+                card.innerHTML = `<div>${emoji}</div><div class="level-number">${i+1}</div>`;
+                card.onclick = () => startLevel(i);
+                levelGrid.appendChild(card);
+            });
+        }
+
+        function startLevel(idx) {
+            currentLevel = idx;
+            document.getElementById('menu-screen').classList.remove('active-screen');
+            document.getElementById('game-screen').classList.add('active-screen');
+            levelNumDisplay.innerText = idx + 1;
+            hintDisplay.innerText = puzzles[idx];
+            
+            pieces = [0, 1, 2, 3];
+            shuffle(pieces);
+            renderPuzzle();
+        }
+
+        function goToMenu() {
+            document.getElementById('game-screen').classList.remove('active-screen');
+            document.getElementById('menu-screen').classList.add('active-screen');
+            initMenu();
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            if (isSolved()) shuffle(array);
+        }
+
+        function shuffleCurrent() {
+            shuffle(pieces);
+            renderPuzzle();
+        }
+
+        let draggedIdx = null;
+
+        function renderPuzzle() {
+            puzzleContainer.innerHTML = '';
+            pieces.forEach((pieceType, i) => {
+                const piece = document.createElement('div');
+                piece.className = `puzzle-piece piece-${pieceType}`;
+                piece.setAttribute('draggable', 'true');
+                piece.dataset.index = i;
+                
+                piece.innerHTML = `<div class="piece-inner">${puzzles[currentLevel]}</div>`;
+                
+                // Mouse Drag Events
+                piece.addEventListener('dragstart', handleDragStart);
+                piece.addEventListener('dragover', handleDragOver);
+                piece.addEventListener('dragenter', handleDragEnter);
+                piece.addEventListener('dragleave', handleDragLeave);
+                piece.addEventListener('drop', handleDrop);
+                piece.addEventListener('dragend', handleDragEnd);
+
+                // Touch Events
+                piece.addEventListener('touchstart', handleTouchStart, {passive: false});
+                piece.addEventListener('touchmove', handleTouchMove, {passive: false});
+                piece.addEventListener('touchend', handleTouchEnd);
+
+                puzzleContainer.appendChild(piece);
+            });
+        }
+
+        // Mouse Drag Handlers
+        function handleDragStart(e) {
+            draggedIdx = parseInt(this.dataset.index);
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) e.preventDefault();
+            return false;
+        }
+
+        function handleDragEnter(e) { this.classList.add('over'); }
+        function handleDragLeave(e) { this.classList.remove('over'); }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) e.stopPropagation();
+            const targetIdx = parseInt(this.dataset.index);
+            if (draggedIdx !== targetIdx) {
+                swapPieces(draggedIdx, targetIdx);
+            }
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            document.querySelectorAll('.puzzle-piece').forEach(p => {
+                p.classList.remove('dragging');
+                p.classList.remove('over');
+            });
+        }
+
+        // Touch Handlers
+        let touchStartX, touchStartY;
+        let touchElement = null;
+
+        function handleTouchStart(e) {
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchElement = this;
+            draggedIdx = parseInt(this.dataset.index);
+            this.classList.add('dragging');
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const piece = touchElement;
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            piece.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`;
+            
+            // Find element under touch
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            const dropTarget = target ? target.closest('.puzzle-piece') : null;
+            
+            document.querySelectorAll('.puzzle-piece').forEach(p => p.classList.remove('over'));
+            if (dropTarget && dropTarget !== piece) {
+                dropTarget.classList.add('over');
+            }
+        }
+
+        function handleTouchEnd(e) {
+            this.classList.remove('dragging');
+            this.style.transform = '';
+            
+            const touch = e.changedTouches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            const dropTarget = target ? target.closest('.puzzle-piece') : null;
+            
+            if (dropTarget) {
+                const targetIdx = parseInt(dropTarget.dataset.index);
+                if (draggedIdx !== targetIdx) {
+                    swapPieces(draggedIdx, targetIdx);
+                }
+            }
+            
+            document.querySelectorAll('.puzzle-piece').forEach(p => p.classList.remove('over'));
+            touchElement = null;
+        }
+
+        function swapPieces(idx1, idx2) {
+            [pieces[idx1], pieces[idx2]] = [pieces[idx2], pieces[idx1]];
+            renderPuzzle();
+            checkWin();
+        }
+
+        function isSolved() {
+            return pieces.every((val, i) => val === i);
+        }
+
+        function checkWin() {
+            if (isSolved()) {
+                if (!completedLevels.includes(currentLevel)) {
+                    completedLevels.push(currentLevel);
+                    localStorage.setItem('completedLevels', JSON.stringify(completedLevels));
+                }
+                
+                showCelebration();
+                setTimeout(() => {
+                    if (currentLevel < puzzles.length - 1) {
+                        startLevel(currentLevel + 1);
+                    } else {
+                        goToMenu();
+                    }
+                }, 2000);
+            }
+        }
+
+        function showCelebration() {
+            const cel = document.getElementById('celebration');
+            cel.style.display = 'block';
+            playWinSound();
+            setTimeout(() => {
+                cel.style.display = 'none';
+            }, 2000);
+        }
+
+        function playWinSound() {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.5);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        }
+
+        window.onload = initMenu;
+    </script>
+</body>
+</html>

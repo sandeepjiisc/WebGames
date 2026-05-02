@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Coloring & Learn Kids</title>
+    <style>
+        :root {
+            --primary: #ff4757;
+            --secondary: #1e90ff;
+            --accent: #facc15;
+            --bg: #f1f2f6;
+        }
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Comic Sans MS', 'Chalkboard SE', 'Segoe UI', sans-serif; background: var(--bg); user-select: none; -webkit-user-select: none; }
+        
+        .back-to-hub { position: absolute; top: 15px; left: 15px; background: rgba(0, 0, 0, 0.5); color: white; border: 3px solid #fff; padding: 10px 20px; border-radius: 30px; cursor: pointer; z-index: 2000; text-decoration: none; font-size: 18px; font-weight: bold; transition: transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .back-to-hub:active { transform: scale(0.9); }
+        
+        /* Screens */
+        .screen { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; flex-direction: column; justify-content: center; align-items: center; background-size: cover; background-position: center; }
+        .active-screen { display: flex; }
+        
+        /* Main Menu */
+        #menu-screen { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); touch-action: pan-y; overflow-y: auto; justify-content: flex-start; padding-top: 80px; padding-bottom: 40px; box-sizing: border-box;}
+        #menu-screen h1 { font-size: 60px; color: var(--primary); text-shadow: 3px 3px 0 #fff, 0 0 20px rgba(255,71,87,0.5); text-align: center; margin-bottom: 50px; line-height: 1.1; flex-shrink: 0;}
+        .menu-grid { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 800px; padding: 20px; }
+        .menu-card { width: 200px; height: 200px; background: white; border-radius: 30px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); border: 8px solid white; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.2s; }
+        .menu-card:active { transform: scale(0.95); }
+        .menu-card.coloring { border-color: #ff6b81; }
+        .menu-card.glow { border-color: #2f3542; background: #2f3542; color: white;}
+        .menu-card.balloons { border-color: #1e90ff; }
+        .menu-card .icon { font-size: 80px; margin-bottom: 10px; }
+        .menu-card .title { font-size: 24px; font-weight: bold; text-align: center; }
+
+        /* Canvas Area */
+        #drawing-screen { background: #fff; }
+        #canvas-container { position: relative; width: 100vw; height: calc(100vh - 100px); top: 0; overflow: hidden; background: #fff; cursor: crosshair; touch-action: none;}
+        #drawing-canvas { position: absolute; top: 0; left: 0; }
+        #glow-canvas { position: absolute; top: 0; left: 0; background: #111; display: none; }
+        
+        /* Toolbar */
+        .toolbar { position: absolute; bottom: 0; left: 0; width: 100%; height: 100px; background: #f8f9fa; border-top: 4px solid #dfe4ea; display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; gap: 15px; overflow-x: auto; white-space: nowrap; z-index: 1000; touch-action: pan-x;}
+        .tool-btn { width: 60px; height: 60px; border-radius: 50%; border: 4px solid transparent; cursor: pointer; flex-shrink: 0; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; font-size: 24px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        .tool-btn:active { transform: scale(0.8); }
+        .tool-btn.active { border-color: #2ed573; transform: scale(1.1); box-shadow: 0 0 15px rgba(46, 213, 115, 0.5);}
+        .color-btn { width: 50px; height: 50px; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.2); cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
+        .color-btn:active { transform: scale(0.8); }
+        .color-btn.active { border-color: #2ed573; transform: scale(1.2); }
+        .divider { width: 4px; height: 60px; background: #dfe4ea; border-radius: 2px; flex-shrink: 0; margin: 0 10px; }
+
+        /* Top Bar */
+        .top-bar { position: absolute; top: 15px; right: 15px; display: flex; gap: 15px; z-index: 1000; }
+        .action-btn { background: white; border: 3px solid #dfe4ea; width: 60px; height: 60px; border-radius: 20px; font-size: 28px; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .action-btn:active { transform: scale(0.9); }
+
+        /* Balloon Minigame */
+        #balloon-screen { background: linear-gradient(to bottom, #87CEEB, #e0f6ff); overflow: hidden; touch-action: none; }
+        .balloon { position: absolute; width: 80px; height: 100px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 40px; box-shadow: inset -10px -10px 20px rgba(0,0,0,0.2); cursor: pointer; }
+        .balloon::before { content: ''; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 10px solid; border-bottom-color: inherit; }
+        .balloon::after { content: ''; position: absolute; bottom: -40px; left: 50%; width: 2px; height: 30px; background: rgba(0,0,0,0.3); }
+        
+        .balloon-ui { position: absolute; top: 20px; width: 100%; display: flex; justify-content: center; z-index: 100; pointer-events: none;}
+        .balloon-score { font-size: 50px; font-weight: bold; color: white; text-shadow: 0 4px 10px rgba(0,0,0,0.3); background: rgba(255,255,255,0.3); padding: 10px 40px; border-radius: 40px; border: 4px solid white;}
+        
+        .pop-text { position: absolute; font-size: 30px; font-weight: bold; color: white; text-shadow: 0 2px 5px rgba(0,0,0,0.5); pointer-events: none; animation: floatUp 1s ease-out forwards; }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-50px) scale(1.5); opacity: 0; } }
+
+        /* Mobile Layout */
+        @media (max-width: 768px) {
+            #menu-screen h1 { font-size: 40px; margin-bottom: 30px; margin-top: 60px; }
+            #menu-screen h1 span { font-size: 20px !important; }
+            .menu-grid { padding: 10px; gap: 15px; }
+            .menu-card { width: 140px; height: 140px; border-width: 5px; border-radius: 20px;}
+            .menu-card .icon { font-size: 50px; margin-bottom: 5px; }
+            .menu-card .title { font-size: 18px; }
+            
+            .toolbar { height: 80px; padding: 0 10px; gap: 10px; }
+            .tool-btn { width: 45px; height: 45px; font-size: 20px; border-width: 3px;}
+            .color-btn { width: 40px; height: 40px; border-width: 3px;}
+            .divider { height: 50px; margin: 0 5px; }
+            
+            .top-bar { top: 10px; right: 10px; gap: 10px; }
+            .action-btn { width: 45px; height: 45px; font-size: 20px; border-radius: 15px; }
+            
+            .back-to-hub { top: 10px; left: 10px; font-size: 14px; padding: 8px 15px; border-width: 2px;}
+            
+            #canvas-container { height: calc(100vh - 80px); }
+            
+            .balloon { width: 60px; height: 75px; font-size: 30px; }
+            .balloon-score { font-size: 36px; padding: 8px 25px; border-width: 3px; }
+            #balloon-screen .top-bar { top: 10px !important; right: 10px !important; }
+            #balloon-screen .action-btn { width: 50px !important; height: 50px !important; font-size: 24px !important; }
+        }
+
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-to-hub" id="hub-btn">🏠 Hub</a>
+    
+    <!-- MAIN MENU -->
+    <div id="menu-screen" class="screen active-screen">
+        <h1>Coloring & Learn<br><span style="font-size:30px; color:#1e90ff;">Creative Kids Studio</span></h1>
+        <div class="menu-grid">
+            <div class="menu-card coloring" onclick="openDrawing('normal')">
+                <div class="icon">🎨</div>
+                <div class="title" style="color: #ff6b81;">Free Draw</div>
+            </div>
+            <div class="menu-card glow" onclick="openDrawing('glow')">
+                <div class="icon">✨</div>
+                <div class="title" style="color: #a78bfa;">Glow Art</div>
+            </div>
+            <div class="menu-card balloons" onclick="openBalloons()">
+                <div class="icon">🎈</div>
+                <div class="title" style="color: #1e90ff;">Pop Balloons</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DRAWING SCREEN -->
+    <div id="drawing-screen" class="screen">
+        <div class="top-bar">
+            <div class="action-btn" onclick="clearCanvas()" title="Clear">🗑️</div>
+            <div class="action-btn" onclick="closeDrawing()" title="Menu">❌</div>
+        </div>
+        
+        <div id="canvas-container">
+            <canvas id="drawing-canvas"></canvas>
+            <canvas id="glow-canvas"></canvas>
+        </div>
+
+        <div class="toolbar" id="toolbar">
+            <!-- Tools -->
+            <div class="tool-btn active" id="tool-brush" onclick="setTool('brush')">🖌️</div>
+            <div class="tool-btn" id="tool-pencil" onclick="setTool('pencil')">✏️</div>
+            <div class="tool-btn" id="tool-eraser" onclick="setTool('eraser')">🧽</div>
+            
+            <div class="divider"></div>
+            
+            <!-- Sizes -->
+            <div class="tool-btn" onclick="setSize(5)" style="padding:15px"><div style="width:10px; height:10px; background:#333; border-radius:50%"></div></div>
+            <div class="tool-btn" onclick="setSize(15)" style="padding:15px"><div style="width:20px; height:20px; background:#333; border-radius:50%"></div></div>
+            <div class="tool-btn" onclick="setSize(30)" style="padding:15px"><div style="width:40px; height:40px; background:#333; border-radius:50%"></div></div>
+            
+            <div class="divider"></div>
+            
+            <!-- Colors -->
+            <div class="color-btn active" style="background:#ff4757" onclick="setColor('#ff4757', this)"></div>
+            <div class="color-btn" style="background:#ffa502" onclick="setColor('#ffa502', this)"></div>
+            <div class="color-btn" style="background:#eccc68" onclick="setColor('#eccc68', this)"></div>
+            <div class="color-btn" style="background:#2ed573" onclick="setColor('#2ed573', this)"></div>
+            <div class="color-btn" style="background:#1e90ff" onclick="setColor('#1e90ff', this)"></div>
+            <div class="color-btn" style="background:#5352ed" onclick="setColor('#5352ed', this)"></div>
+            <div class="color-btn" style="background:#ff6b81" onclick="setColor('#ff6b81', this)"></div>
+            <div class="color-btn" style="background:#a4b0be" onclick="setColor('#a4b0be', this)"></div>
+            <div class="color-btn" style="background:#2f3542" onclick="setColor('#2f3542', this)"></div>
+            <div class="color-btn" style="background:#ffffff" onclick="setColor('#ffffff', this)"></div>
+            
+            <!-- Stickers -->
+            <div class="divider"></div>
+            <div class="tool-btn" onclick="setTool('sticker', '⭐')">⭐</div>
+            <div class="tool-btn" onclick="setTool('sticker', '❤️')">❤️</div>
+            <div class="tool-btn" onclick="setTool('sticker', '🐶')">🐶</div>
+            <div class="tool-btn" onclick="setTool('sticker', '🚗')">🚗</div>
+        </div>
+    </div>
+
+    <!-- BALLOON SCREEN -->
+    <div id="balloon-screen" class="screen">
+        <div class="top-bar" style="top: 20px; right: 20px;">
+            <div class="action-btn" onclick="closeBalloons()" style="width: 80px; height: 80px; font-size: 36px;">❌</div>
+        </div>
+        <div class="balloon-ui">
+            <div class="balloon-score" id="b-score">0</div>
+        </div>
+        <div id="balloon-area" style="position: absolute; width: 100%; height: 100%;"></div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const screens = {
+            menu: document.getElementById('menu-screen'),
+            drawing: document.getElementById('drawing-screen'),
+            balloon: document.getElementById('balloon-screen')
+        };
+        const hubBtn = document.getElementById('hub-btn');
+
+        // Canvas Setup
+        const canvasContainer = document.getElementById('canvas-container');
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const glowCanvas = document.getElementById('glow-canvas');
+        const glowCtx = glowCanvas.getContext('2d', { willReadFrequently: true });
+        
+        let currentCtx = ctx;
+        let isGlowMode = false;
+
+        // Drawing State
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        let currentColor = '#ff4757';
+        let currentSize = 15;
+        let currentTool = 'brush'; // brush, pencil, eraser, sticker
+        let currentSticker = '⭐';
+
+        // Resize Canvas
+        function resizeCanvas() {
+            const w = canvasContainer.clientWidth;
+            const h = canvasContainer.clientHeight;
+            
+            // Save current drawing
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            if(canvas.width > 0 && canvas.height > 0) {
+                tempCtx.drawImage(canvas, 0, 0);
+            }
+            
+            const tempGlow = document.createElement('canvas');
+            const tempGlowCtx = tempGlow.getContext('2d');
+            tempGlow.width = glowCanvas.width;
+            tempGlow.height = glowCanvas.height;
+            if(glowCanvas.width > 0 && glowCanvas.height > 0) {
+                tempGlowCtx.drawImage(glowCanvas, 0, 0);
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            glowCanvas.width = w;
+            glowCanvas.height = h;
+
+            // Restore drawing
+            ctx.drawImage(tempCanvas, 0, 0);
+            glowCtx.drawImage(tempGlow, 0, 0);
+            
+            // Fill background for normal canvas if empty
+            if(canvas.width > 0 && canvas.height > 0 && !isGlowMode) {
+               ctx.fillStyle = '#ffffff';
+               ctx.globalCompositeOperation = 'destination-over';
+               ctx.fillRect(0, 0, w, h);
+               ctx.globalCompositeOperation = 'source-over';
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Screen Navigation
+        function showScreen(name) {
+            Object.values(screens).forEach(s => s.classList.remove('active-screen'));
+            screens[name].classList.add('active-screen');
+            if (name === 'menu') hubBtn.style.display = 'block';
+            else hubBtn.style.display = 'none';
+        }
+
+        // Drawing App Logic
+        function openDrawing(mode) {
+            isGlowMode = (mode === 'glow');
+            if (isGlowMode) {
+                canvas.style.display = 'none';
+                glowCanvas.style.display = 'block';
+                currentCtx = glowCtx;
+            } else {
+                canvas.style.display = 'block';
+                glowCanvas.style.display = 'none';
+                currentCtx = ctx;
+            }
+            clearCanvas();
+            showScreen('drawing');
+            resizeCanvas(); // Ensure size is correct after unhiding
+        }
+
+        function closeDrawing() {
+            showScreen('menu');
+        }
+
+        function clearCanvas() {
+            if (isGlowMode) {
+                glowCtx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+                glowCtx.fillStyle = '#111';
+                glowCtx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function setTool(tool, stickerChar = null) {
+            currentTool = tool;
+            if (stickerChar) currentSticker = stickerChar;
+            
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            if (tool === 'brush') document.getElementById('tool-brush').classList.add('active');
+            if (tool === 'pencil') document.getElementById('tool-pencil').classList.add('active');
+            if (tool === 'eraser') document.getElementById('tool-eraser').classList.add('active');
+            
+            if (tool === 'sticker') {
+                event.currentTarget.classList.add('active');
+            }
+        }
+
+        function setSize(size) {
+            currentSize = size;
+        }
+
+        function setColor(color, btn) {
+            currentColor = color;
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (currentTool === 'eraser') setTool('brush');
+        }
+
+        // Pointer Events
+        function getPointerPos(e) {
+            const rect = canvasContainer.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+            
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const pos = getPointerPos(e);
+            lastX = pos.x;
+            lastY = pos.y;
+            
+            if (currentTool === 'sticker') {
+                drawSticker(pos.x, pos.y);
+                isDrawing = false; // Single tap for sticker
+            } else {
+                draw(e); // Draw single dot
+            }
+        }
+
+        function draw(e) {
+            if (!isDrawing || currentTool === 'sticker') return;
+            e.preventDefault(); // Prevent scrolling on mobile
+            
+            const pos = getPointerPos(e);
+            
+            currentCtx.beginPath();
+            currentCtx.moveTo(lastX, lastY);
+            currentCtx.lineTo(pos.x, pos.y);
+            
+            // Setup style based on tool/mode
+            if (currentTool === 'eraser') {
+                currentCtx.strokeStyle = isGlowMode ? '#111' : '#ffffff';
+                currentCtx.lineWidth = currentSize * 2;
+                currentCtx.lineCap = 'round';
+                currentCtx.lineJoin = 'round';
+                currentCtx.shadowBlur = 0;
+            } else {
+                currentCtx.strokeStyle = currentColor;
+                currentCtx.lineWidth = currentTool === 'pencil' ? currentSize / 3 : currentSize;
+                currentCtx.lineCap = 'round';
+                currentCtx.lineJoin = 'round';
+                
+                if (isGlowMode) {
+                    currentCtx.shadowBlur = currentSize * 1.5;
+                    currentCtx.shadowColor = currentColor;
+                    // Draw a white core for the neon effect
+                    currentCtx.stroke();
+                    currentCtx.strokeStyle = '#ffffff';
+                    currentCtx.lineWidth = currentCtx.lineWidth / 3;
+                } else {
+                    currentCtx.shadowBlur = 0;
+                }
+            }
+            
+            currentCtx.stroke();
+            
+            lastX = pos.x;
+            lastY = pos.y;
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            currentCtx.beginPath(); // Reset path
+        }
+
+        function drawSticker(x, y) {
+            currentCtx.shadowBlur = isGlowMode ? 20 : 0;
+            currentCtx.shadowColor = currentColor;
+            currentCtx.font = `${currentSize * 4}px Arial`;
+            currentCtx.textAlign = 'center';
+            currentCtx.textBaseline = 'middle';
+            // Slight random rotation for fun
+            currentCtx.save();
+            currentCtx.translate(x, y);
+            currentCtx.rotate((Math.random() - 0.5) * 0.5);
+            currentCtx.fillText(currentSticker, 0, 0);
+            currentCtx.restore();
+        }
+
+        // Attach Canvas Listeners
+        canvasContainer.addEventListener('mousedown', startDrawing);
+        canvasContainer.addEventListener('mousemove', draw);
+        canvasContainer.addEventListener('mouseup', stopDrawing);
+        canvasContainer.addEventListener('mouseleave', stopDrawing);
+        
+        canvasContainer.addEventListener('touchstart', startDrawing, {passive: false});
+        canvasContainer.addEventListener('touchmove', draw, {passive: false});
+        canvasContainer.addEventListener('touchend', stopDrawing);
+
+        // ==========================================
+        // BALLOON MINIGAME
+        // ==========================================
+        let balloonInterval;
+        let balloonLoop;
+        let bScore = 0;
+        const balloonArea = document.getElementById('balloon-area');
+        const bScoreText = document.getElementById('b-score');
+        const balloonColors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9c88ff', '#ff6b81'];
+        const emojis = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'];
+
+        function openBalloons() {
+            showScreen('balloon');
+            bScore = 0;
+            bScoreText.innerText = bScore;
+            balloonArea.innerHTML = '';
+            
+            // Spawn loop
+            balloonLoop = setInterval(spawnBalloon, 1000);
+            balloonInterval = requestAnimationFrame(updateBalloons);
+        }
+
+        function closeBalloons() {
+            clearInterval(balloonLoop);
+            cancelAnimationFrame(balloonInterval);
+            balloonArea.innerHTML = '';
+            showScreen('menu');
+        }
+
+        function spawnBalloon() {
+            const b = document.createElement('div');
+            b.className = 'balloon';
+            
+            const color = balloonColors[Math.floor(Math.random() * balloonColors.length)];
+            b.style.backgroundColor = color;
+            b.style.borderBottomColor = color; // For the tie
+            
+            // Random Emoji
+            b.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+            
+            // Starting position
+            const size = 80;
+            const startX = Math.random() * (window.innerWidth - size);
+            b.style.left = startX + 'px';
+            b.style.top = window.innerHeight + 'px';
+            
+            // Physics
+            b.dataset.speed = 2 + Math.random() * 3;
+            b.dataset.wobbleSpeed = 0.05 + Math.random() * 0.05;
+            b.dataset.wobbleOffset = Math.random() * Math.PI * 2;
+            b.dataset.baseX = startX;
+            b.dataset.y = window.innerHeight;
+            
+            // Interaction
+            b.addEventListener('mousedown', () => popBalloon(b));
+            b.addEventListener('touchstart', (e) => { e.preventDefault(); popBalloon(b); });
+            
+            balloonArea.appendChild(b);
+        }
+
+        function updateBalloons(time) {
+            const balloons = document.querySelectorAll('.balloon');
+            balloons.forEach(b => {
+                let y = parseFloat(b.dataset.y);
+                let speed = parseFloat(b.dataset.speed);
+                y -= speed;
+                b.dataset.y = y;
+                
+                // Wobble
+                let wobble = Math.sin(time * parseFloat(b.dataset.wobbleSpeed) + parseFloat(b.dataset.wobbleOffset)) * 20;
+                b.style.transform = `translateX(${wobble}px)`;
+                b.style.top = y + 'px';
+                
+                // Remove if off screen
+                if (y < -150) {
+                    b.remove();
+                }
+            });
+            
+            if(screens.balloon.classList.contains('active-screen')){
+                balloonInterval = requestAnimationFrame(updateBalloons);
+            }
+        }
+
+        function popBalloon(b) {
+            if (b.dataset.popped) return;
+            b.dataset.popped = "true";
+            
+            // Visual pop
+            b.style.transform = 'scale(1.5)';
+            b.style.opacity = '0';
+            b.style.transition = 'all 0.1s';
+            
+            // Score text
+            const rect = b.getBoundingClientRect();
+            const txt = document.createElement('div');
+            txt.className = 'pop-text';
+            txt.innerText = b.innerText + ' POP!';
+            txt.style.left = rect.left + 'px';
+            txt.style.top = rect.top + 'px';
+            balloonArea.appendChild(txt);
+            
+            bScore += 10;
+            bScoreText.innerText = bScore;
+            
+            // Cleanup
+            setTimeout(() => { b.remove(); }, 150);
+            setTimeout(() => { txt.remove(); }, 1000);
+        }
+        
+    </script>
+</body>
+</html>
